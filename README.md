@@ -11,7 +11,8 @@ A browser-only rating game for Plex libraries. Sign in through Plex PIN authenti
 - `store/quest-store.ts` — MobX domain store with device-local resume support
 - `app/components/QuestUi.tsx` — shared, accessible interface primitives
 - `deploy/nginx.conf` — hardened static server, caching, compression, and safe access logs
-- `Dockerfile` and `compose.yaml` — the only supported production hosting path
+- `Dockerfile` — used only by GitHub Actions to produce the published image
+- `compose.yaml` — pull-only production deployment; it never builds locally
 
 The runtime container serves immutable static assets. It has no database and does not retain Plex credentials.
 
@@ -26,32 +27,38 @@ npm run dev
 
 Open `http://localhost:5173`. Use **Explore demo** to exercise the full flow without Plex.
 
-## Self-host with Docker Compose
+## Agent deployment instructions
 
-Docker Compose is the primary and only supported deployment method. No GPT Sites, Vercel, Netlify, or Cloudflare Pages deployment is used.
+Docker Compose is the only supported deployment method. Deployment agents must pull the published GHCR image and must not run `docker build`, `docker compose build`, or publish an image themselves. No GPT Sites, Vercel, Netlify, or Cloudflare Pages deployment is used.
+
+Use these steps exactly:
+
+1. Verify Docker Engine and Docker Compose v2 are installed with `docker version` and `docker compose version`.
+2. Clone or fast-forward the public repository.
+3. Copy `.env.example` to `.env`. Keep the immutable image tag unless the user explicitly selects another published version or `sha-<commit>` tag.
+4. Because the GHCR package is private by default, run `docker login ghcr.io` interactively with the GitHub username and a token having only `read:packages`. Never place that token in `.env`, Compose YAML, shell history, logs, or the repository.
+5. Pull the prebuilt image, start it, and verify both Compose health and the HTTP health endpoint.
 
 ```bash
 git clone https://github.com/mrRedSun/plex-rating-quest.git
 cd plex-rating-quest
-docker compose build --pull
-docker compose up -d
-docker compose ps
-```
-
-Open `http://YOUR_SERVER:8080`. To use another host port:
-
-```bash
-PLEX_RATING_PORT=9090 docker compose up -d
-```
-
-Successful `main` builds also publish the exact scanned image to private GHCR with immutable `sha-<commit>` and `v<version>` tags plus a `main` convenience alias. Authenticate with a GitHub token that can read packages before pulling:
-
-```bash
+cp .env.example .env
 docker login ghcr.io
-docker pull ghcr.io/mrredsun/plex-rating-quest:main
+docker compose pull
+docker compose up -d --remove-orphans
+docker compose ps
+curl --fail --show-error http://127.0.0.1:8080/healthz
 ```
 
-Local Compose builds remain the default and require no registry credentials.
+The expected health response is `ok`, and `docker compose ps` must report the service as healthy. If either check fails, inspect `docker compose logs --tail=200 plex-rating-quest` and do not claim deployment succeeded.
+
+Open `http://YOUR_SERVER:8080`. To use another host port, edit `PLEX_RATING_PORT` in `.env`, then recreate the service:
+
+```bash
+docker compose up -d --remove-orphans
+```
+
+Successful `main` builds publish the exact scanned image to private GHCR with immutable `sha-<commit>` and `v<version>` tags plus a mutable `main` convenience alias. Production deployments must pin `PLEX_RATING_IMAGE` to an immutable version or SHA tag; do not deploy `main` as provenance.
 
 For Plex authentication, put the container behind an HTTPS reverse proxy with a stable hostname. The app opens Plex authentication in a pop-up; allow pop-ups for the hostname. Plain HTTP is appropriate only for local demo testing.
 
@@ -61,18 +68,17 @@ For Plex authentication, put the container behind an HTTPS reverse proxy with a 
 # Privacy-safe access and application-server errors
 docker compose logs --tail=200 -f plex-rating-quest
 
-# Upgrade and recreate without downtime-sensitive state or volumes
+# Upgrade to a user-approved published tag: edit PLEX_RATING_IMAGE in .env first
 git pull --ff-only
-docker compose build --pull
+docker compose pull
 docker compose up -d --remove-orphans
 
 # Health check
 curl --fail http://127.0.0.1:8080/healthz
 
-# Roll back to a known commit
-git checkout <known-good-commit>
-docker compose build
-docker compose up -d
+# Roll back: restore the previous immutable image tag in .env, then pull/recreate
+docker compose pull
+docker compose up -d --remove-orphans
 
 # Stop without deleting images or unrelated Docker data
 docker compose down
@@ -107,8 +113,9 @@ Authentication follows Plex’s PIN flow. The access token exists only in live b
 
 ```bash
 npm run check
-docker compose build
 ```
+
+Image construction, vulnerability scanning, and GHCR publication run only in GitHub Actions. Self-hosting agents consume the published artifact through `docker compose pull`.
 
 The build uses production ES2022 output, minification, comment/debugger removal, CSS splitting, deterministic vendor chunks, no source maps, long-lived immutable asset caching, gzip transfer compression, and enforced gzip-size budgets. The browser must receive JavaScript to run the app, so minification cannot make frontend source impossible to inspect; no secret or privileged rule may rely on source concealment.
 

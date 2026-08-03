@@ -1,9 +1,7 @@
 services:
   plex-rating-quest:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: plex-rating-quest:local
+    image: "${PLEX_RATING_IMAGE:-ghcr.io/mrredsun/plex-rating-quest:v1.0.0}"
+    pull_policy: always
     container_name: plex-rating-quest
     restart: unless-stopped
     ports:
