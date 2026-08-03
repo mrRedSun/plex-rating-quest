@@ -14,7 +14,7 @@ COPY src ./src
 COPY store ./store
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.29.1-alpine3.22@sha256:27985295bdb22a1ef8f712863210bd5877c0f3006494a593e86b3fe0fa55467e AS runtime
+FROM nginxinc/nginx-unprivileged:1.31.3-alpine3.24@sha256:a6c3ec0c0d249d68b0682df854d4a9e222b90fb607dc3fcf2f1d2fcbc85d347e AS runtime
 COPY --chown=101:101 deploy/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build --chown=101:101 /app/dist /usr/share/nginx/html
 
