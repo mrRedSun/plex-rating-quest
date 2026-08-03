@@ -21,6 +21,10 @@ const STORAGE_KEY = "plex-rating-quest-session";
 interface PersistedQuestState {
   readonly stage: QuestStage;
   readonly userName: string;
+  readonly accountId: string | null;
+  readonly accessToken: string | null;
+  readonly servers: readonly PlexServer[];
+  readonly selectedServer: PlexServer | null;
   readonly isDemo: boolean;
   readonly libraries: readonly PlexLibrary[];
   readonly media: readonly MediaItem[];
@@ -54,6 +58,7 @@ function readPersistedState(): Partial<PersistedQuestState> {
 export class QuestStore {
   stage: QuestStage = "welcome";
   userName = "Explorer";
+  accountId: string | null = null;
   isDemo = false;
   accessToken: string | null = null;
   servers: readonly PlexServer[] = [];
@@ -81,6 +86,10 @@ export class QuestStore {
       const persisted: PersistedQuestState = {
         stage: this.stage,
         userName: this.userName,
+        accountId: this.accountId,
+        accessToken: this.accessToken,
+        servers: this.servers,
+        selectedServer: this.selectedServer,
         isDemo: this.isDemo,
         libraries: this.libraries,
         media: stripArtwork(this.media),
@@ -105,9 +114,9 @@ export class QuestStore {
 
   startDemo(): void {
     logEvent("quest.demo.started", { mediaCount: DEMO_MEDIA.length });
-    this.resetState();
+    this.resetQuestState();
     this.isDemo = true;
-    this.userName = "Roman";
+    if (this.accessToken === null) this.userName = "Roman";
     this.media = DEMO_MEDIA;
     this.libraries = [
       { id: "movies", title: "Movies", type: "movie" },
@@ -116,9 +125,19 @@ export class QuestStore {
     this.stage = "mode";
   }
 
-  setPlexData(connection: {
+  setPlexAuth(auth: {
     readonly token: string;
+    readonly accountId: string;
     readonly accountName: string;
+  }): void {
+    logEvent("auth.session.saved");
+    this.accessToken = auth.token;
+    this.accountId = auth.accountId;
+    this.userName = auth.accountName;
+    this.isDemo = false;
+  }
+
+  setPlexData(connection: {
     readonly servers: readonly PlexServer[];
     readonly selectedServer: PlexServer;
     readonly libraries: readonly PlexLibrary[];
@@ -129,12 +148,10 @@ export class QuestStore {
       libraryCount: connection.libraries.length,
       mediaCount: connection.media.length,
     });
-    this.accessToken = connection.token;
     this.servers = connection.servers;
     this.selectedServer = connection.selectedServer;
     this.libraries = connection.libraries;
     this.media = connection.media;
-    this.userName = connection.accountName;
     this.stage = "mode";
     this.isDemo = false;
   }
@@ -258,22 +275,24 @@ export class QuestStore {
   reset(): void {
     clearDiagnostics();
     logEvent("quest.reset");
-    this.resetState();
+    this.resetQuestState();
   }
 
   logout(): void {
     logEvent("auth.logout");
-    this.resetState();
+    this.resetQuestState();
+    this.accountId = null;
+    this.accessToken = null;
+    this.userName = "Explorer";
+    this.servers = [];
+    this.selectedServer = null;
+    localStorage.removeItem("plex-rating-quest-pending-pin");
   }
 
-  private resetState(): void {
+  private resetQuestState(): void {
     runInAction(() => {
       this.stage = "welcome";
-      this.userName = "Explorer";
       this.isDemo = false;
-      this.accessToken = null;
-      this.servers = [];
-      this.selectedServer = null;
       this.libraries = [];
       this.media = [];
       this.session = [];

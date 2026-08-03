@@ -150,9 +150,12 @@ describe("resumable Plex authentication", () => {
 
   it("logs out and clears account-derived state", () => {
     const store = new QuestStore();
-    store.setPlexData({
+    store.setPlexAuth({
       token: "private-token",
+      accountId: "account-id",
       accountName: "movie-fan",
+    });
+    store.setPlexData({
       servers: [],
       selectedServer: {
         name: "Living Room",
@@ -169,5 +172,27 @@ describe("resumable Plex authentication", () => {
     expect(store.selectedServer).toBeNull();
     expect(store.userName).toBe("Explorer");
     expect(store.stage).toBe("welcome");
+  });
+
+  it("persists Plex authorization through reloads until logout", () => {
+    const store = new QuestStore();
+    store.setPlexAuth({
+      token: "private-token",
+      accountId: "account-id",
+      accountName: "movie-fan",
+    });
+    const stopPersistence = store.startPersistence();
+    store.reset();
+    stopPersistence();
+
+    const restored = new QuestStore();
+    expect(restored.accessToken).toBe("private-token");
+    expect(restored.accountId).toBe("account-id");
+    expect(restored.userName).toBe("movie-fan");
+    expect(restored.stage).toBe("welcome");
+
+    restored.logout();
+    expect(restored.accessToken).toBeNull();
+    expect(restored.accountId).toBeNull();
   });
 });
