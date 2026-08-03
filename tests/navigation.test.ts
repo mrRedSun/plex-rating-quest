@@ -10,6 +10,7 @@ describe("browser navigation", () => {
     expect(pathForStage("welcome")).toBe("/");
     expect(pathForStage("tier-list")).toBe("/tier-list");
     expect(pathForStage("review")).toBe("/review");
+    expect(pathForStage("dashboard")).toBe("/ratings");
   });
 
   it("accepts only known app history entries", () => {
