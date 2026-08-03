@@ -1,0 +1,276 @@
+"use client";
+
+import { autorun, makeAutoObservable, runInAction } from "mobx";
+import { DEMO_MEDIA } from "../lib/demo-data";
+import { clearDiagnostics, logEvent } from "../lib/diagnostics";
+import { DEFAULT_FILTERS, filterMedia } from "../lib/quest";
+import type {
+  MediaItem,
+  PendingRating,
+  PlexLibrary,
+  PlexServer,
+  QuestFilters,
+  QuestMode,
+  QuestStage,
+} from "../lib/types";
+
+const STORAGE_KEY = "plex-rating-quest-session";
+
+interface PersistedQuestState {
+  readonly stage: QuestStage;
+  readonly userName: string;
+  readonly isDemo: boolean;
+  readonly libraries: readonly PlexLibrary[];
+  readonly media: readonly MediaItem[];
+  readonly session: readonly MediaItem[];
+  readonly mode: QuestMode;
+  readonly filters: QuestFilters;
+  readonly index: number;
+  readonly ratings: Readonly<Record<string, PendingRating>>;
+  readonly skips: number;
+  readonly startedAt: string | null;
+  readonly isPaused: boolean;
+}
+
+function stripArtwork(items: readonly MediaItem[]): readonly MediaItem[] {
+  return items.map((item) => ({ ...item, posterUrl: null, backdropUrl: null }));
+}
+
+function readPersistedState(): Partial<PersistedQuestState> {
+  try {
+    const serialized = localStorage.getItem(STORAGE_KEY);
+    return serialized === null
+      ? {}
+      : (JSON.parse(serialized) as Partial<PersistedQuestState>);
+  } catch {
+    localStorage.removeItem(STORAGE_KEY);
+    return {};
+  }
+}
+
+export class QuestStore {
+  stage: QuestStage = "welcome";
+  userName = "Explorer";
+  isDemo = false;
+  accessToken: string | null = null;
+  servers: readonly PlexServer[] = [];
+  selectedServer: PlexServer | null = null;
+  libraries: readonly PlexLibrary[] = [];
+  media: readonly MediaItem[] = [];
+  session: readonly MediaItem[] = [];
+  mode: QuestMode = "watched";
+  filters: QuestFilters = DEFAULT_FILTERS;
+  index = 0;
+  ratings: Readonly<Record<string, PendingRating>> = {};
+  skips = 0;
+  startedAt: string | null = null;
+  isPaused = false;
+
+  constructor() {
+    makeAutoObservable(this, {}, { autoBind: true });
+    if (typeof window !== "undefined")
+      Object.assign(this, readPersistedState());
+  }
+
+  startPersistence(): () => void {
+    return autorun(() => {
+      const persisted: PersistedQuestState = {
+        stage: this.stage,
+        userName: this.userName,
+        isDemo: this.isDemo,
+        libraries: this.libraries,
+        media: stripArtwork(this.media),
+        session: stripArtwork(this.session),
+        mode: this.mode,
+        filters: this.filters,
+        index: this.index,
+        ratings: this.ratings,
+        skips: this.skips,
+        startedAt: this.startedAt,
+        isPaused: this.isPaused,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    });
+  }
+
+  setStage(stage: QuestStage): void {
+    logEvent("quest.stage.changed", { from: this.stage, to: stage });
+    this.stage = stage;
+  }
+
+  startDemo(): void {
+    logEvent("quest.demo.started", { mediaCount: DEMO_MEDIA.length });
+    this.resetState();
+    this.isDemo = true;
+    this.userName = "Roman";
+    this.media = DEMO_MEDIA;
+    this.libraries = [
+      { id: "movies", title: "Movies", type: "movie" },
+      { id: "shows", title: "Shows", type: "show" },
+    ];
+    this.stage = "mode";
+  }
+
+  setPlexData(
+    token: string,
+    servers: readonly PlexServer[],
+    selectedServer: PlexServer,
+    libraries: readonly PlexLibrary[],
+    media: readonly MediaItem[],
+  ): void {
+    logEvent("quest.plex.ready", {
+      serverCount: servers.length,
+      libraryCount: libraries.length,
+      mediaCount: media.length,
+    });
+    this.accessToken = token;
+    this.servers = servers;
+    this.selectedServer = selectedServer;
+    this.libraries = libraries;
+    this.media = media;
+    this.userName = "Plex member";
+    this.stage = "mode";
+    this.isDemo = false;
+  }
+
+  setMode(mode: QuestMode): void {
+    logEvent("quest.mode.selected", { mode });
+    this.mode = mode;
+    if (mode === "watched")
+      this.filters = {
+        ...this.filters,
+        minimumWatchCount: Math.max(1, this.filters.minimumWatchCount),
+      };
+  }
+
+  setFilters(filters: QuestFilters): void {
+    logEvent("quest.filters.updated", {
+      minimumWatchCount: filters.minimumWatchCount,
+      minimumYear: filters.minimumYear,
+      maximumYear: filters.maximumYear,
+      hideDocumentaries: filters.hideDocumentaries,
+      hideKids: filters.hideKids,
+    });
+    this.filters = filters;
+  }
+
+  createSession(): void {
+    this.session = filterMedia(this.media, this.mode, this.filters);
+    logEvent("quest.session.created", {
+      mode: this.mode,
+      mediaCount: this.session.length,
+    });
+    this.index = 0;
+    this.ratings = {};
+    this.skips = 0;
+    this.startedAt = new Date().toISOString();
+    this.stage = "rating";
+  }
+
+  rateCurrent(value: number | null): void {
+    const item = this.session[this.index];
+    if (item === undefined) return;
+    const atEnd = this.index >= this.session.length - 1;
+    const rating: PendingRating = {
+      mediaId: item.id,
+      value,
+      previousValue: item.userRating,
+      updatedAt: new Date().toISOString(),
+    };
+    logEvent(
+      "quest.rating.queued",
+      {
+        position: this.index + 1,
+        rating: value,
+        replacedExisting: item.userRating !== null,
+        atEnd,
+      },
+      "debug",
+    );
+    this.ratings = { ...this.ratings, [item.id]: rating };
+    if (atEnd) this.stage = "review";
+    else this.index += 1;
+  }
+
+  skipCurrent(): void {
+    const atEnd = this.index >= this.session.length - 1;
+    logEvent(
+      "quest.item.skipped",
+      { position: this.index + 1, atEnd },
+      "debug",
+    );
+    this.skips += 1;
+    if (atEnd) this.stage = "review";
+    else this.index += 1;
+  }
+
+  previous(): void {
+    logEvent("quest.navigation.previous", { from: this.index + 1 }, "debug");
+    this.index = Math.max(0, this.index - 1);
+  }
+
+  next(): void {
+    logEvent("quest.navigation.next", { from: this.index + 1 }, "debug");
+    this.index = Math.min(this.session.length - 1, this.index + 1);
+  }
+
+  togglePause(): void {
+    logEvent(this.isPaused ? "quest.resumed" : "quest.paused", {
+      position: this.index + 1,
+    });
+    this.isPaused = !this.isPaused;
+  }
+
+  updateRating(mediaId: string, value: number | null): void {
+    const item = this.media.find((candidate) => candidate.id === mediaId);
+    if (item === undefined) {
+      logEvent("quest.review.update.missing", {}, "warn");
+      return;
+    }
+    logEvent("quest.review.updated", { rating: value }, "debug");
+    this.ratings = {
+      ...this.ratings,
+      [mediaId]: {
+        mediaId,
+        value,
+        previousValue: item.userRating,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  reset(): void {
+    clearDiagnostics();
+    logEvent("quest.reset");
+    this.resetState();
+  }
+
+  private resetState(): void {
+    runInAction(() => {
+      this.stage = "welcome";
+      this.userName = "Explorer";
+      this.isDemo = false;
+      this.accessToken = null;
+      this.servers = [];
+      this.selectedServer = null;
+      this.libraries = [];
+      this.media = [];
+      this.session = [];
+      this.mode = "watched";
+      this.filters = DEFAULT_FILTERS;
+      this.index = 0;
+      this.ratings = {};
+      this.skips = 0;
+      this.startedAt = null;
+      this.isPaused = false;
+    });
+  }
+}
+
+export const questStore = new QuestStore();
+
+export function useQuestStore<Selection>(
+  selector: (store: QuestStore) => Selection,
+): Selection {
+  return selector(questStore);
+}

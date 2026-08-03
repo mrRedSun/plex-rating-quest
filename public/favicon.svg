@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Plex Rating Quest</title>
+  <defs>
+    <linearGradient id="background" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2b1728" />
+      <stop offset="1" stop-color="#09070b" />
+    </linearGradient>
+    <linearGradient id="gold" x1="19" y1="13" x2="48" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffe18c" />
+      <stop offset="1" stop-color="#e5a00d" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#background)" />
+  <path d="m32 10 6.1 12.4 13.7 2-9.9 9.6 2.3 13.6L32 41.2l-12.2 6.4L22.1 34l-9.9-9.6 13.7-2L32 10Z" fill="url(#gold)" />
+  <path d="m29 24 10 8-10 8V24Z" fill="#17100a" />
+</svg>
