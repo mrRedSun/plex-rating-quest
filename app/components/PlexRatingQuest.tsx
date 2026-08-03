@@ -19,6 +19,7 @@ import {
   Sparkles,
   Star,
   Trash2,
+  Trophy,
   X,
   Zap,
 } from "lucide-react";
@@ -47,6 +48,7 @@ import type {
   QuestMode,
 } from "../../lib/types";
 import { useQuestStore } from "../../store/quest-store";
+import { TierListStudio } from "./TierListStudio";
 import {
   Brand,
   DiagnosticsButton,
@@ -352,7 +354,13 @@ const ModeSelect = observer(function ModeSelect(): React.ReactElement {
           ))}
         </div>
         <div className="bottom-actions">
-          <span />
+          <button className="tier-entry" onClick={() => setStage("tier-list")}>
+            <Trophy size={18} />
+            <span>
+              <strong>Build a show tier list</strong>
+              <small>Rank watched shows and export it</small>
+            </span>
+          </button>
           <PrimaryButton onClick={() => setStage("filters")}>
             Set your filters <ArrowRight size={18} />
           </PrimaryButton>
@@ -1102,6 +1110,7 @@ export const PlexRatingQuest = observer(
     if (stage === "rating") return <RatingGame />;
     if (stage === "review") return <Review />;
     if (stage === "applying") return <Applying />;
+    if (stage === "tier-list") return <TierListStudio />;
     return <Complete />;
   },
 );

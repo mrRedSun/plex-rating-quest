@@ -9,6 +9,8 @@ Turn a large Plex library into a fast rating game. Connect through Plex, filter 
 - Watched, unrated, movie, show, year, genre, library, and play-count filters
 - Keyboard-first rating with a resumable local queue
 - Review and confirmation before Plex is updated
+- Watched-show tier lists with persistent S–D rankings
+- Privacy-safe PNG and AI-ready Markdown tier-list exports
 - Privacy-safe downloadable diagnostics
 - Responsive interface with reduced-motion support
 - Self-hosted, pull-only Docker Compose deployment
@@ -56,7 +58,7 @@ Edit `.env` before starting the service:
 
 | Variable            | Default                                     | Purpose                             |
 | ------------------- | ------------------------------------------- | ----------------------------------- |
-| `PLEX_RATING_IMAGE` | `ghcr.io/mrredsun/plex-rating-quest:v1.0.0` | Immutable published image tag       |
+| `PLEX_RATING_IMAGE` | `ghcr.io/mrredsun/plex-rating-quest:v1.1.0` | Immutable published image tag       |
 | `PLEX_RATING_PORT`  | `8080`                                      | Host port mapped to the application |
 
 Prefer a `v<version>` or `sha-<commit>` image tag. The mutable `main` tag is available for testing but should not be used as production provenance.
