@@ -1,6 +1,6 @@
 services:
   plex-rating-quest:
-    image: "${PLEX_RATING_IMAGE:-ghcr.io/mrredsun/plex-rating-quest:v1.1.0}"
+    image: ghcr.io/mrredsun/plex-rating-quest:v1.1.0
     pull_policy: always
     container_name: plex-rating-quest
     restart: unless-stopped
@@ -17,7 +17,8 @@ services:
     mem_limit: 128m
     cpus: 0.50
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/healthz"]
+      test:
+        ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/healthz"]
       interval: 30s
       timeout: 3s
       retries: 3
