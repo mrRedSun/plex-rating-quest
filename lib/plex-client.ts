@@ -5,6 +5,8 @@ import type { MediaItem, PlexLibrary, PlexServer } from "./types";
 const PRODUCT = "Plex Rating Quest";
 const PIN_ENDPOINT = "https://plex.tv/api/v2/pins";
 const RESOURCE_ENDPOINT = "https://plex.tv/api/v2/resources";
+const PENDING_PIN_KEY = "plex-rating-quest-pending-pin";
+const PIN_MAX_AGE_MS = 10 * 60 * 1000;
 
 const pinSchema = z.object({
   id: z.number(),
@@ -62,9 +64,42 @@ const mediaSchema = z.object({
   }),
 });
 
-interface PlexPin {
+export interface PlexPin {
   readonly id: number;
   readonly code: string;
+}
+
+const pendingPinSchema = z.object({
+  id: z.number(),
+  code: z.string(),
+  createdAt: z.number(),
+});
+
+export function savePendingPlexPin(pin: PlexPin): void {
+  window.localStorage.setItem(
+    PENDING_PIN_KEY,
+    JSON.stringify({ ...pin, createdAt: Date.now() }),
+  );
+  logEvent("auth.pending.saved");
+}
+
+export function readPendingPlexPin(): PlexPin | null {
+  const serialized = window.localStorage.getItem(PENDING_PIN_KEY);
+  if (serialized === null) return null;
+  try {
+    const pending = pendingPinSchema.parse(JSON.parse(serialized));
+    if (Date.now() - pending.createdAt <= PIN_MAX_AGE_MS)
+      return { id: pending.id, code: pending.code };
+    logEvent("auth.pending.expired", {}, "warn");
+  } catch (reason) {
+    logError("auth.pending.invalid", reason);
+  }
+  clearPendingPlexPin();
+  return null;
+}
+
+export function clearPendingPlexPin(): void {
+  window.localStorage.removeItem(PENDING_PIN_KEY);
 }
 
 function getClientId(): string {
