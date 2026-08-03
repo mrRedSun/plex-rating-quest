@@ -7,10 +7,12 @@ import {
   Check,
   ChevronRight,
   CirclePause,
+  Clipboard,
   Flame,
   Gamepad2,
   LoaderCircle,
   LockKeyhole,
+  LayoutDashboard,
   LogOut,
   Play,
   RotateCcw,
@@ -109,6 +111,10 @@ function formatDate(value: string): string {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+async function copyText(value: string): Promise<void> {
+  await navigator.clipboard.writeText(value);
 }
 
 const Welcome = observer(function Welcome(): React.ReactElement {
@@ -462,13 +468,28 @@ const ModeSelect = observer(function ModeSelect(): React.ReactElement {
           ))}
         </div>
         <div className="bottom-actions">
-          <button className="tier-entry" onClick={() => setStage("tier-list")}>
-            <Trophy size={18} />
-            <span>
-              <strong>Build a show tier list</strong>
-              <small>Rank watched shows and export it</small>
-            </span>
-          </button>
+          <div className="mode-tools">
+            <button
+              className="tier-entry"
+              onClick={() => setStage("dashboard")}
+            >
+              <LayoutDashboard size={18} />
+              <span>
+                <strong>Open ratings dashboard</strong>
+                <small>Review and copy ratings for recommendations</small>
+              </span>
+            </button>
+            <button
+              className="tier-entry"
+              onClick={() => setStage("tier-list")}
+            >
+              <Trophy size={18} />
+              <span>
+                <strong>Build a show tier list</strong>
+                <small>Rank watched shows and export it</small>
+              </span>
+            </button>
+          </div>
           <PrimaryButton onClick={() => setStage("filters")}>
             Set your filters <ArrowRight size={18} />
           </PrimaryButton>
@@ -477,6 +498,130 @@ const ModeSelect = observer(function ModeSelect(): React.ReactElement {
     </Shell>
   );
 });
+
+const RatingsDashboard = observer(
+  function RatingsDashboard(): React.ReactElement {
+    const media = useQuestStore((state) => state.media);
+    const setStage = useQuestStore((state) => state.setStage);
+    const [copied, setCopied] = useState(false);
+    const [copyError, setCopyError] = useState<string | null>(null);
+    const rated = useMemo(
+      () =>
+        media
+          .filter((item) => item.userRating !== null)
+          .toSorted((left, right) =>
+            (right.userRating ?? 0) === (left.userRating ?? 0)
+              ? left.title.localeCompare(right.title)
+              : (right.userRating ?? 0) - (left.userRating ?? 0),
+          ),
+      [media],
+    );
+    const ratedShows = rated.filter((item) => item.kind === "show");
+    const average =
+      rated.length === 0
+        ? 0
+        : rated.reduce((sum, item) => sum + (item.userRating ?? 0), 0) /
+          rated.length;
+    const copyForRecommendations = async (): Promise<void> => {
+      const lines = ratedShows.map(
+        (item) =>
+          `- ${item.title}${item.year > 0 ? ` (${item.year})` : ""}: ${((item.userRating ?? 0) / 2).toFixed(1)}/5`,
+      );
+      const prompt = [
+        "Recommend shows based on my Plex ratings. Avoid recommending titles already listed unless explaining a close comparison.",
+        "",
+        "My rated shows:",
+        ...lines,
+      ].join("\n");
+      try {
+        await copyText(prompt);
+        setCopyError(null);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+        logEvent("ratings.dashboard.copied", { showCount: ratedShows.length });
+      } catch (reason) {
+        logError("ratings.dashboard.copy.failed", reason);
+        setCopyError("Copy failed. Allow clipboard access and try again.");
+      }
+    };
+    return (
+      <Shell compact>
+        <header className="topbar">
+          <Brand />
+          <AccountControls />
+        </header>
+        <section className="content-panel ratings-dashboard">
+          <button className="text-back" onClick={() => setStage("mode")}>
+            <ArrowLeft size={16} /> Back to quests
+          </button>
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">Your taste profile</span>
+              <h1>Ratings dashboard</h1>
+              <p>Your Plex ratings, ready to explore or share with an agent.</p>
+            </div>
+            <PrimaryButton
+              onClick={() => {
+                void copyForRecommendations();
+              }}
+              disabled={ratedShows.length === 0}
+            >
+              {copied ? <Check size={17} /> : <Clipboard size={17} />}
+              {copied ? "Copied" : "Copy shows for AI"}
+            </PrimaryButton>
+          </div>
+          <div className="rating-metrics">
+            <div>
+              <span>Rated titles</span>
+              <strong>{rated.length}</strong>
+            </div>
+            <div>
+              <span>Rated shows</span>
+              <strong>{ratedShows.length}</strong>
+            </div>
+            <div>
+              <span>Average</span>
+              <strong>
+                {rated.length === 0 ? "—" : `${(average / 2).toFixed(1)}/5`}
+              </strong>
+            </div>
+          </div>
+          {copyError === null ? null : (
+            <p className="error-message" role="alert">
+              {copyError}
+            </p>
+          )}
+          {rated.length === 0 ? (
+            <div className="empty-state">
+              <h2>No Plex ratings yet</h2>
+              <p>Rate a few titles, then reload your Plex data.</p>
+            </div>
+          ) : (
+            <div
+              className="ratings-table"
+              role="table"
+              aria-label="Plex ratings"
+            >
+              {rated.map((item) => (
+                <div className="rating-row" role="row" key={item.id}>
+                  <span className="rating-title" role="cell">
+                    <strong>{item.title}</strong>
+                    <small>
+                      {item.kind} · {item.year || "Year unknown"}
+                    </small>
+                  </span>
+                  <strong role="cell">
+                    {((item.userRating ?? 0) / 2).toFixed(1)} / 5
+                  </strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </Shell>
+    );
+  },
+);
 
 const Filters = observer(function Filters(): React.ReactElement {
   const filters = useQuestStore((state) => state.filters);
@@ -1274,6 +1419,7 @@ export const PlexRatingQuest = observer(
     if (stage === "review") return <Review />;
     if (stage === "applying") return <Applying />;
     if (stage === "tier-list") return <TierListStudio />;
+    if (stage === "dashboard") return <RatingsDashboard />;
     return <Complete />;
   },
 );
