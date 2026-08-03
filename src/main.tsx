@@ -1,5 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
 import { PlexRatingQuest } from "../app/components/PlexRatingQuest";
 import "../app/globals.css";
 import { logError, logEvent } from "../lib/diagnostics";

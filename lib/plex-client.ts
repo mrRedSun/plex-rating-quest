@@ -227,33 +227,31 @@ export async function fetchPlexMedia(
         { headers: headers(server.accessToken) },
       );
       const parsed = mediaSchema.parse(await response.json());
-      return parsed.MediaContainer.Metadata.map(
-        (item): MediaItem => ({
-          id: item.ratingKey,
-          title: item.title,
-          year: item.year ?? 0,
-          kind: item.type,
-          runtimeMinutes: Math.round((item.duration ?? 0) / 60_000),
-          genres: item.Genre?.map((genre) => genre.tag) ?? [],
-          watchCount: item.viewCount ?? 0,
-          watchedAt:
-            item.lastViewedAt === undefined
-              ? "Never"
-              : new Date(item.lastViewedAt * 1000).toISOString(),
-          posterUrl:
-            item.thumb === undefined
-              ? null
-              : `${server.uri}${item.thumb}?X-Plex-Token=${encodeURIComponent(server.accessToken)}`,
-          backdropUrl:
-            item.art === undefined
-              ? null
-              : `${server.uri}${item.art}?X-Plex-Token=${encodeURIComponent(server.accessToken)}`,
-          audienceRating: item.audienceRating ?? null,
-          criticRating: item.rating ?? null,
-          userRating: item.userRating ?? null,
-          libraryId: library.id,
-        }),
-      );
+      return parsed.MediaContainer.Metadata.map((item): MediaItem => ({
+        id: item.ratingKey,
+        title: item.title,
+        year: item.year ?? 0,
+        kind: item.type,
+        runtimeMinutes: Math.round((item.duration ?? 0) / 60_000),
+        genres: item.Genre?.map((genre) => genre.tag) ?? [],
+        watchCount: item.viewCount ?? 0,
+        watchedAt:
+          item.lastViewedAt === undefined
+            ? "Never"
+            : new Date(item.lastViewedAt * 1000).toISOString(),
+        posterUrl:
+          item.thumb === undefined
+            ? null
+            : `${server.uri}${item.thumb}?X-Plex-Token=${encodeURIComponent(server.accessToken)}`,
+        backdropUrl:
+          item.art === undefined
+            ? null
+            : `${server.uri}${item.art}?X-Plex-Token=${encodeURIComponent(server.accessToken)}`,
+        audienceRating: item.audienceRating ?? null,
+        criticRating: item.rating ?? null,
+        userRating: item.userRating ?? null,
+        libraryId: library.id,
+      }));
     }),
   );
   const media = results.flat();
