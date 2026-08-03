@@ -1,4 +1,10 @@
-export const QUEST_MODES = ["watched", "unrated", "everything", "movies", "shows"] as const;
+export const QUEST_MODES = [
+  "watched",
+  "unrated",
+  "everything",
+  "movies",
+  "shows",
+] as const;
 export type QuestMode = (typeof QUEST_MODES)[number];
 export type MediaKind = "movie" | "show";
 
@@ -36,7 +42,14 @@ export interface QuestFilters {
   readonly hideKids: boolean;
 }
 
-export type QuestStage = "welcome" | "mode" | "filters" | "rating" | "review" | "applying" | "complete";
+export type QuestStage =
+  | "welcome"
+  | "mode"
+  | "filters"
+  | "rating"
+  | "review"
+  | "applying"
+  | "complete";
 
 export interface PlexServer {
   readonly name: string;

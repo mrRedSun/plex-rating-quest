@@ -8,7 +8,8 @@ A browser-only rating game for Plex libraries. Sign in through Plex PIN authenti
 - `lib/plex-client.ts` — typed Plex PIN, discovery, library, and rating API boundary
 - `lib/diagnostics.ts` — bounded, structured, privacy-safe browser diagnostics
 - `lib/quest.ts` — pure filtering, estimation, and statistics logic
-- `store/quest-store.ts` — Zustand session state with device-local resume support
+- `store/quest-store.ts` — MobX domain store with device-local resume support
+- `app/components/QuestUi.tsx` — shared, accessible interface primitives
 - `deploy/nginx.conf` — hardened static server, caching, compression, and safe access logs
 - `Dockerfile` and `compose.yaml` — the only supported production hosting path
 

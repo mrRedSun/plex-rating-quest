@@ -16,18 +16,20 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
+    "format:check": "prettier --check \"app/**/*.{ts,tsx,css}\" \"lib/**/*.ts\" \"src/**/*.{ts,tsx}\" \"store/**/*.ts\" \"tests/**/*.ts\"",
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.468.0",
+    "mobx": "^6.15.0",
+    "mobx-react-lite": "^4.1.0",
     "motion-dom": "12.23.23",
     "motion-utils": "12.23.6",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "zod": "^4.1.12",
-    "zustand": "^5.0.8"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
@@ -46,6 +48,7 @@
     "eslint-plugin-unicorn": "^61.0.2",
     "globals": "17.9.0",
     "jsdom": "^27.0.0",
+    "prettier": "^3.6.2",
     "typescript": "5.9.3",
     "typescript-eslint": "8.46.1",
     "vite": "8.0.13",

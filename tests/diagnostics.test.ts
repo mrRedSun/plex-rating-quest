@@ -5,8 +5,15 @@ describe("privacy-safe diagnostics", () => {
   beforeEach(() => window.sessionStorage.clear());
 
   it("redacts sensitive keys and query parameters", () => {
-    logEvent("auth.test", { token: "secret-value", serverUrl: "https://private.example", count: 2 });
-    logError("request.failed", new Error("Failed at https://example.test/?X-Plex-Token=top-secret"));
+    logEvent("auth.test", {
+      token: "secret-value",
+      serverUrl: "https://private.example",
+      count: 2,
+    });
+    logError(
+      "request.failed",
+      new Error("Failed at https://example.test/?X-Plex-Token=top-secret"),
+    );
 
     const report = createDiagnosticReport();
     expect(report).not.toContain("secret-value");
@@ -17,8 +24,11 @@ describe("privacy-safe diagnostics", () => {
   });
 
   it("keeps event history bounded", () => {
-    for (let index = 0; index < 450; index += 1) logEvent("bounded.event", { index }, "debug");
-    const parsed = JSON.parse(createDiagnosticReport()) as { events: readonly unknown[] };
+    for (let index = 0; index < 450; index += 1)
+      logEvent("bounded.event", { index }, "debug");
+    const parsed = JSON.parse(createDiagnosticReport()) as {
+      events: readonly unknown[];
+    };
     expect(parsed.events).toHaveLength(400);
   });
 });
