@@ -1,9 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, ChevronRight, CirclePause, Gamepad2, LoaderCircle, LockKeyhole, LogOut, Play, RotateCcw, Search, ShieldCheck, Sparkles, Star, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bug, Check, ChevronRight, CirclePause, Flame, Gamepad2, LoaderCircle, LockKeyhole, LogOut, Play, RotateCcw, Search, ShieldCheck, Sparkles, Star, Trash2, X, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyPlexRating, buildPlexAuthUrl, createPlexPin, fetchPlexLibraries, fetchPlexMedia, fetchPlexServers, waitForPlexToken } from "../../lib/plex-client";
+import { downloadDiagnosticReport, logError, logEvent } from "../../lib/diagnostics";
 import { calculateStats, DEFAULT_FILTERS, estimateMinutes, filterMedia } from "../../lib/quest";
 import type { MediaItem, PlexServer, QuestFilters, QuestMode } from "../../lib/types";
 import { useQuestStore } from "../../store/quest-store";
@@ -29,8 +30,12 @@ function PrimaryButton({ children, onClick, disabled = false, variant = "primary
   return <button className={`button button-${variant}`} type={type} onClick={onClick} disabled={disabled}>{children}</button>;
 }
 
+function DiagnosticsButton(): React.ReactElement {
+  return <button className="diagnostics-button" type="button" onClick={downloadDiagnosticReport} aria-label="Download privacy-safe diagnostics"><Bug size={14} /> Diagnostics</button>;
+}
+
 function Shell({ children, compact = false }: { readonly children: React.ReactNode; readonly compact?: boolean }): React.ReactElement {
-  return <main className={`app-shell${compact ? " compact" : ""}`}><div className="noise" /><div className="aurora aurora-one" /><div className="aurora aurora-two" />{children}</main>;
+  return <main className={`app-shell${compact ? " compact" : ""}`}><div className="noise" /><div className="aurora aurora-one" /><div className="aurora aurora-two" />{children}<DiagnosticsButton /></main>;
 }
 
 function Welcome(): React.ReactElement {
@@ -49,14 +54,19 @@ function Welcome(): React.ReactElement {
   }, [setPlexData]);
 
   const connect = useCallback(async (): Promise<void> => {
+    logEvent("auth.connection.started");
     setError(null);
     setStatus("connecting");
     const controller = new AbortController();
     abortRef.current = controller;
+    const popup = window.open("about:blank", "plex-auth", "popup,width=720,height=760");
     try {
+      if (popup === null) throw new Error("Your browser blocked the Plex sign-in window. Allow pop-ups for this site and try again.");
+      popup.document.title = "Connecting to Plex…";
       const pin = await createPlexPin();
-      window.open(buildPlexAuthUrl(pin), "plex-auth", "popup,width=720,height=760");
+      popup.location.href = buildPlexAuthUrl(pin);
       const accessToken = await waitForPlexToken(pin, controller.signal);
+      popup.close();
       const servers = await fetchPlexServers(accessToken);
       if (servers.length === 0) throw new Error("No reachable Plex Media Server was found.");
       if (servers.length > 1) {
@@ -69,6 +79,8 @@ function Welcome(): React.ReactElement {
         await finishConnection(accessToken, server, servers);
       }
     } catch (reason) {
+      popup?.close();
+      logError("auth.connection.failed", reason);
       if (!(reason instanceof DOMException && reason.name === "AbortError")) setError(reason instanceof Error ? reason.message : "Plex connection failed.");
       setStatus("idle");
     }
@@ -121,15 +133,20 @@ function Filters(): React.ReactElement {
   const media = useQuestStore((state) => state.media);
   const mode = useQuestStore((state) => state.mode);
   const count = filterMedia(media, mode, filters).length;
+  const minutes = estimateMinutes(count);
+  const minimumWatchCount = mode === "watched" ? Math.max(1, filters.minimumWatchCount) : filters.minimumWatchCount;
   const update = <Key extends keyof QuestFilters>(key: Key, value: QuestFilters[Key]): void => setFilters({ ...filters, [key]: value });
   const genres = [...new Set(media.flatMap((item) => item.genres))].sort();
-  return <Shell compact><header className="topbar"><Brand /><span className="step-label">Step 2 of 2</span></header><section className="content-panel filters-panel"><div className="section-heading"><div><span className="eyebrow">Fine tune the journey</span><h1>Quest settings</h1><p>Optional filters. You can keep things broad and move fast.</p></div></div><div className="filters-layout"><div className="filter-card"><div className="field-row"><label>Minimum watch count<input type="number" min="0" value={filters.minimumWatchCount} onChange={(event) => update("minimumWatchCount", Number(event.target.value))} /></label><label>Library<select value={filters.libraryId} onChange={(event) => update("libraryId", event.target.value)}><option value="all">All libraries</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.title}</option>)}</select></label></div><div className="field-row"><label>From year<input type="number" min="1900" value={filters.minimumYear} onChange={(event) => update("minimumYear", Number(event.target.value))} /></label><label>Through year<input type="number" min="1900" value={filters.maximumYear} onChange={(event) => update("maximumYear", Number(event.target.value))} /></label></div><label>Genre<select value={filters.genre} onChange={(event) => update("genre", event.target.value)}><option value="all">All genres</option>{genres.map((genre) => <option key={genre} value={genre}>{genre}</option>)}</select></label><div className="toggle-row"><label><input type="checkbox" checked={filters.hideDocumentaries} onChange={(event) => update("hideDocumentaries", event.target.checked)} /><span>Hide documentaries</span></label><label><input type="checkbox" checked={filters.hideKids} onChange={(event) => update("hideKids", event.target.checked)} /><span>Hide kids & family</span></label></div></div><aside className="session-summary"><span className="eyebrow">Your session</span><strong>{count}</strong><h2>titles to rate</h2><div className="summary-rule" /><p><span>Estimated time</span><b>{estimateMinutes(count)} min</b></p><p><span>Writes to Plex</span><b>Only at the end</b></p><PrimaryButton onClick={createSession} disabled={count === 0}><Play size={17} fill="currentColor" /> Start quest</PrimaryButton></aside></div><div className="bottom-actions"><PrimaryButton variant="ghost" onClick={() => setStage("mode")}><ArrowLeft size={18} /> Back</PrimaryButton><button className="text-button" onClick={() => setFilters(DEFAULT_FILTERS)}>Reset filters</button></div></section></Shell>;
+  const resetFilters = (): void => setFilters({ ...DEFAULT_FILTERS, minimumWatchCount: mode === "watched" ? 1 : 0 });
+  // Nested checkbox inputs inherit the adjacent visible copy as their accessible labels.
+  // eslint-disable-next-line jsx-a11y/label-has-associated-control
+  return <Shell compact><header className="topbar"><Brand /><span className="step-label">Step 2 of 2</span></header><section className="content-panel filters-panel"><div className="filter-hero"><div><span className="eyebrow"><Sparkles size={14} /> Build your challenge</span><h1>Shape the quest.</h1><p>Pick a vibe, sharpen the rules, then chase the streak.</p></div><div className="quest-energy"><Flame size={22} /><span><strong>{Math.max(1, Math.round(count / Math.max(1, minutes)))}</strong><small>ratings / min</small></span></div></div><div className="preset-row" aria-label="Quest presets"><button onClick={() => setFilters({ ...DEFAULT_FILTERS, minimumWatchCount: mode === "watched" ? 1 : 0 })}><Zap size={17} /><span><strong>Speed run</strong><small>Everything eligible</small></span></button><button onClick={() => setFilters({ ...DEFAULT_FILTERS, minimumWatchCount: 2, maximumYear: 2014 })}><Flame size={17} /><span><strong>Deep cuts</strong><small>Rewatched classics</small></span></button><button onClick={() => setFilters({ ...DEFAULT_FILTERS, minimumWatchCount: mode === "watched" ? 1 : 0, minimumYear: 2018 })}><Sparkles size={17} /><span><strong>Modern hits</strong><small>2018 and newer</small></span></button></div><div className="filters-layout"><div className="filter-card"><div className="filter-card-title"><span className="filter-number">01</span><div><h2>Set the rules</h2><p>Every choice updates your quest forecast instantly.</p></div></div><div className="field-row"><label>Minimum plays<span className="field-hint">{mode === "watched" ? "Watched mode always requires 1+" : "Zero includes unwatched titles"}</span><input type="number" min={mode === "watched" ? 1 : 0} value={minimumWatchCount} onChange={(event) => update("minimumWatchCount", Math.max(mode === "watched" ? 1 : 0, Number(event.target.value)))} /></label><label>Library<span className="field-hint">Choose your arena</span><select value={filters.libraryId} onChange={(event) => update("libraryId", event.target.value)}><option value="all">All libraries</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.title}</option>)}</select></label></div><div className="field-row"><label>From year<span className="field-hint">Start of the era</span><input type="number" min="1900" value={filters.minimumYear} onChange={(event) => update("minimumYear", Number(event.target.value))} /></label><label>Through year<span className="field-hint">End of the era</span><input type="number" min="1900" value={filters.maximumYear} onChange={(event) => update("maximumYear", Number(event.target.value))} /></label></div><label>Genre<span className="field-hint">Follow your current mood</span><select value={filters.genre} onChange={(event) => update("genre", event.target.value)}><option value="all">Surprise me — all genres</option>{genres.map((genre) => <option key={genre} value={genre}>{genre}</option>)}</select></label><div className="toggle-row"><label><input type="checkbox" checked={filters.hideDocumentaries} onChange={(event) => update("hideDocumentaries", event.target.checked)} /><span><b>Skip documentaries</b><small>Keep it fictional</small></span></label><label><input type="checkbox" checked={filters.hideKids} onChange={(event) => update("hideKids", event.target.checked)} /><span><b>Grown-up mode</b><small>Hide kids & family</small></span></label></div></div><aside className="session-summary"><div className="summary-badge"><Flame size={15} /> Quest forecast</div><strong>{count}</strong><h2>titles await</h2><div className="forecast-track"><span style={{ width: `${Math.min(100, Math.max(8, count / Math.max(1, media.length) * 100))}%` }} /></div><p><span>Estimated run</span><b>{minutes} min</b></p><p><span>Mode lock</span><b>{mode === "watched" ? "Watched 1+" : mode}</b></p><p><span>Plex changes</span><b>Final checkpoint</b></p><div className="streak-tease"><Zap size={15} /><span>First milestone at 25 ratings</span></div><PrimaryButton onClick={createSession} disabled={count === 0}><Play size={17} fill="currentColor" /> Begin the quest</PrimaryButton></aside></div><div className="bottom-actions"><PrimaryButton variant="ghost" onClick={() => setStage("mode")}><ArrowLeft size={18} /> Back</PrimaryButton><button className="text-button" onClick={resetFilters}>Reset the challenge</button></div></section></Shell>;
 }
 
 function StarPicker({ value, onChange, compact = false }: { readonly value: number | null; readonly onChange: (value: number) => void; readonly compact?: boolean }): React.ReactElement {
   const [hovered, setHovered] = useState<number | null>(null);
   const active = hovered ?? value ?? 0;
-  return <div className={`star-picker${compact ? " compact" : ""}`} onMouseLeave={() => setHovered(null)}>{[2, 4, 6, 8, 10].map((starValue, index) => <button key={starValue} aria-label={`${index + 1} stars`} onMouseEnter={() => setHovered(starValue)} onFocus={() => setHovered(starValue)} onBlur={() => setHovered(null)} onClick={() => onChange(starValue)}><Star fill={active >= starValue ? "currentColor" : "none"} /></button>)}</div>;
+  return <div className={`star-picker${compact ? " compact" : ""}`} role="group" aria-label="Rating">{[2, 4, 6, 8, 10].map((starValue, index) => <button key={starValue} aria-label={`${index + 1} stars`} onMouseEnter={() => setHovered(starValue)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(starValue)} onBlur={() => setHovered(null)} onClick={() => onChange(starValue)}><Star fill={active >= starValue ? "currentColor" : "none"} /></button>)}</div>;
 }
 
 function RatingGame(): React.ReactElement {
@@ -162,7 +179,7 @@ function RatingGame(): React.ReactElement {
   }, [isPaused, next, previous, rateCurrent, rating, skipCurrent, togglePause]);
 
   if (item === undefined) return <Shell><div className="empty-state"><h1>No titles found</h1><PrimaryButton onClick={() => setStage("filters")}>Change filters</PrimaryButton></div></Shell>;
-  return <main className="rating-shell" style={{ "--backdrop": item.backdropUrl === null ? "none" : `url(${item.backdropUrl})` } as React.CSSProperties}><div className="rating-backdrop" /><div className="rating-vignette" /><header className="rating-header"><Brand /><div className="rating-progress"><span>{index + 1} <i>/</i> {session.length}</span><div className="progress-track"><span style={{ width: `${progress}%` }} /></div><small>{progress}% · {session.length - index - 1} remaining</small></div><button className="icon-button" aria-label="Pause quest" onClick={togglePause}><CirclePause /></button></header><AnimatePresence mode="wait"><motion.section key={item.id} className="rating-content" initial={{ opacity: 0, x: 70, scale: 0.98 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -80, rotate: -2 }} transition={{ duration: 0.32 }}><div className="game-poster">{item.posterUrl === null ? <div className="poster-fallback">{item.title}</div> : <img src={item.posterUrl} alt={`${item.title} poster`} />}<div className="poster-sheen" /></div><div className="game-info"><div className="title-kind">{item.kind} · watched {item.watchCount}×</div><h1>{item.title}</h1><div className="metadata"><span>{item.year}</span><span>{Math.floor(item.runtimeMinutes / 60)}h {item.runtimeMinutes % 60}m</span><span>{item.genres.join(" · ")}</span></div><div className="score-row"><span><small>AUDIENCE</small><b>{item.audienceRating?.toFixed(1) ?? "—"}</b></span><span><small>CRITICS</small><b>{item.criticRating?.toFixed(1) ?? "—"}</b></span><span><small>LAST WATCHED</small><b>{formatDate(item.watchedAt)}</b></span></div><div className="rate-area"><span className="eyebrow">What did you think?</span><StarPicker value={rating} onChange={rateCurrent} /><p>{rating === null ? "Choose a rating" : `${(rating / 2).toFixed(1)} out of 5`}</p></div><div className="rating-actions"><button onClick={skipCurrent}>Skip <kbd>Space</kbd></button><button onClick={() => rateCurrent(null)}><Trash2 size={16} /> Remove rating</button></div></div></motion.section></AnimatePresence><footer className="rating-footer"><button onClick={previous} disabled={index === 0}><ArrowLeft size={17} /> Previous</button><div><span><kbd>1–5</kbd> Rate</span><span><kbd>← →</kbd> Navigate</span><span><kbd>Esc</kbd> Pause</span></div><button onClick={next} disabled={index >= session.length - 1}>Next <ArrowRight size={17} /></button></footer>{!isPaused ? null : <PauseMenu />}</main>;
+  return <main className="rating-shell" style={{ "--backdrop": item.backdropUrl === null ? "none" : `url(${item.backdropUrl})` } as React.CSSProperties}><div className="rating-backdrop" /><div className="rating-vignette" /><header className="rating-header"><Brand /><div className="rating-progress"><span>{index + 1} <i>/</i> {session.length}</span><div className="progress-track"><span style={{ width: `${progress}%` }} /></div><small>{progress}% · {session.length - index - 1} remaining</small></div><button className="icon-button" aria-label="Pause quest" onClick={togglePause}><CirclePause /></button></header><AnimatePresence mode="wait"><motion.section key={item.id} className="rating-content" initial={{ opacity: 0, x: 70, scale: 0.98 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -80, rotate: -2 }} transition={{ duration: 0.32 }}><div className="game-poster">{item.posterUrl === null ? <div className="poster-fallback">{item.title}</div> : <img src={item.posterUrl} alt={`${item.title} poster`} />}<div className="poster-sheen" /></div><div className="game-info"><div className="title-kind">{item.kind} · watched {item.watchCount}×</div><h1>{item.title}</h1><div className="metadata"><span>{item.year}</span><span>{Math.floor(item.runtimeMinutes / 60)}h {item.runtimeMinutes % 60}m</span><span>{item.genres.join(" · ")}</span></div><div className="score-row"><span><small>AUDIENCE</small><b>{item.audienceRating?.toFixed(1) ?? "—"}</b></span><span><small>CRITICS</small><b>{item.criticRating?.toFixed(1) ?? "—"}</b></span><span><small>LAST WATCHED</small><b>{formatDate(item.watchedAt)}</b></span></div><div className="rate-area"><span className="eyebrow">What did you think?</span><StarPicker value={rating} onChange={rateCurrent} /><p>{rating === null ? "Choose a rating" : `${(rating / 2).toFixed(1)} out of 5`}</p></div><div className="rating-actions"><button onClick={skipCurrent}>Skip <kbd>Space</kbd></button><button onClick={() => rateCurrent(null)}><Trash2 size={16} /> Remove rating</button></div></div></motion.section></AnimatePresence><footer className="rating-footer"><button onClick={previous} disabled={index === 0}><ArrowLeft size={17} /> Previous</button><div><span><kbd>1–5</kbd> Rate</span><span><kbd>← →</kbd> Navigate</span><span><kbd>Esc</kbd> Pause</span></div><button onClick={next} disabled={index >= session.length - 1}>Next <ArrowRight size={17} /></button></footer><DiagnosticsButton />{!isPaused ? null : <PauseMenu />}</main>;
 }
 
 function PauseMenu(): React.ReactElement {
@@ -196,13 +213,20 @@ function Applying(): React.ReactElement {
     if (started.current) return;
     started.current = true;
     const apply = async (): Promise<void> => {
+      let failureCount = 0;
       for (const [index, rating] of entries.entries()) {
         try {
           if (isDemo) await new Promise<void>((resolve) => window.setTimeout(resolve, 240));
-          else if (server !== null) await applyPlexRating(server, rating.mediaId, rating.value);
-        } catch { setFailures((count) => count + 1); }
+          else if (server === null) throw new Error("The Plex server connection is unavailable. Reconnect before applying ratings.");
+          else await applyPlexRating(server, rating.mediaId, rating.value);
+        } catch (reason) {
+          failureCount += 1;
+          logError("quest.batch.item.failed", reason, { position: index + 1 });
+          setFailures((count) => count + 1);
+        }
         setCompleted(index + 1);
       }
+      logEvent("quest.batch.completed", { attempted: entries.length, failures: failureCount });
       window.setTimeout(() => setStage("complete"), 450);
     };
     void apply();

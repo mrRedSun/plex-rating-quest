@@ -6,13 +6,13 @@
     "node": ">=22.13.0"
   },
   "overrides": {
-    "postcss": "8.5.25",
-    "sharp": "0.35.3"
+    "postcss": "8.5.25"
   },
   "scripts": {
-    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
-    "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
-    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build && npm run check:bundle",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "start": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
@@ -20,24 +20,16 @@
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-slider": "^1.3.6",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.468.0",
     "motion-dom": "12.23.23",
     "motion-utils": "12.23.6",
-    "next": "16.2.12",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tailwind-merge": "^3.3.1",
     "zod": "^4.1.12",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@tailwindcss/postcss": "4.2.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@types/node": "22.19.19",
@@ -46,22 +38,18 @@
     "@typescript-eslint/eslint-plugin": "^8.46.1",
     "@typescript-eslint/parser": "^8.46.1",
     "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
     "@vitest/coverage-v8": "^3.2.4",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
     "eslint-plugin-import-x": "^4.16.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.0.0",
     "eslint-plugin-unicorn": "^61.0.2",
+    "globals": "17.9.0",
     "jsdom": "^27.0.0",
-    "react-server-dom-webpack": "19.2.6",
-    "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
-    "vinext": "0.0.50",
+    "typescript-eslint": "8.46.1",
     "vite": "8.0.13",
-    "vitest": "^3.2.4",
-    "wrangler": "4.92.0"
+    "vitest": "^3.2.4"
   },
   "type": "module"
 }

@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { DEMO_MEDIA } from "../lib/demo-data";
+import { clearDiagnostics, logEvent } from "../lib/diagnostics";
 import { DEFAULT_FILTERS, filterMedia } from "../lib/quest";
 import type { MediaItem, PendingRating, PlexLibrary, PlexServer, QuestFilters, QuestMode, QuestStage } from "../lib/types";
 
@@ -59,14 +60,31 @@ const initialState = {
 
 export const useQuestStore = create<QuestState>()(persist((set, get) => ({
   ...initialState,
-  setStage: (stage) => set({ stage }),
-  startDemo: () => set({ ...initialState, isDemo: true, userName: "Roman", media: DEMO_MEDIA, libraries: [{ id: "movies", title: "Movies", type: "movie" }, { id: "shows", title: "Shows", type: "show" }], stage: "mode" }),
-  setPlexData: (accessToken, servers, selectedServer, libraries, media) => set({ accessToken, servers, selectedServer, libraries, media, userName: "Plex member", stage: "mode", isDemo: false }),
-  setMode: (mode) => set({ mode }),
-  setFilters: (filters) => set({ filters }),
+  setStage: (stage) => {
+    logEvent("quest.stage.changed", { from: get().stage, to: stage });
+    set({ stage });
+  },
+  startDemo: () => {
+    logEvent("quest.demo.started", { mediaCount: DEMO_MEDIA.length });
+    set({ ...initialState, isDemo: true, userName: "Roman", media: DEMO_MEDIA, libraries: [{ id: "movies", title: "Movies", type: "movie" }, { id: "shows", title: "Shows", type: "show" }], stage: "mode" });
+  },
+  setPlexData: (accessToken, servers, selectedServer, libraries, media) => {
+    logEvent("quest.plex.ready", { serverCount: servers.length, libraryCount: libraries.length, mediaCount: media.length });
+    set({ accessToken, servers, selectedServer, libraries, media, userName: "Plex member", stage: "mode", isDemo: false });
+  },
+  setMode: (mode) => {
+    logEvent("quest.mode.selected", { mode });
+    set((state) => ({ mode, filters: mode === "watched" ? { ...state.filters, minimumWatchCount: Math.max(1, state.filters.minimumWatchCount) } : state.filters }));
+  },
+  setFilters: (filters) => {
+    logEvent("quest.filters.updated", { minimumWatchCount: filters.minimumWatchCount, minimumYear: filters.minimumYear, maximumYear: filters.maximumYear, hideDocumentaries: filters.hideDocumentaries, hideKids: filters.hideKids });
+    set({ filters });
+  },
   createSession: () => {
     const state = get();
-    set({ session: filterMedia(state.media, state.mode, state.filters), index: 0, ratings: {}, skips: 0, startedAt: new Date().toISOString(), stage: "rating" });
+    const session = filterMedia(state.media, state.mode, state.filters);
+    logEvent("quest.session.created", { mode: state.mode, mediaCount: session.length });
+    set({ session, index: 0, ratings: {}, skips: 0, startedAt: new Date().toISOString(), stage: "rating" });
   },
   rateCurrent: (value) => {
     const state = get();
@@ -74,23 +92,50 @@ export const useQuestStore = create<QuestState>()(persist((set, get) => ({
     if (item === undefined) return;
     const rating: PendingRating = { mediaId: item.id, value, previousValue: item.userRating, updatedAt: new Date().toISOString() };
     const atEnd = state.index >= state.session.length - 1;
+    logEvent("quest.rating.queued", { position: state.index + 1, rating: value, replacedExisting: item.userRating !== null, atEnd }, "debug");
     set({ ratings: { ...state.ratings, [item.id]: rating }, index: atEnd ? state.index : state.index + 1, stage: atEnd ? "review" : "rating" });
   },
   skipCurrent: () => {
     const state = get();
     const atEnd = state.index >= state.session.length - 1;
+    logEvent("quest.item.skipped", { position: state.index + 1, atEnd }, "debug");
     set({ skips: state.skips + 1, index: atEnd ? state.index : state.index + 1, stage: atEnd ? "review" : "rating" });
   },
-  previous: () => set((state) => ({ index: Math.max(0, state.index - 1) })),
-  next: () => set((state) => ({ index: Math.min(state.session.length - 1, state.index + 1) })),
-  togglePause: () => set((state) => ({ isPaused: !state.isPaused })),
+  previous: () => set((state) => {
+    logEvent("quest.navigation.previous", { from: state.index + 1 }, "debug");
+    return { index: Math.max(0, state.index - 1) };
+  }),
+  next: () => set((state) => {
+    logEvent("quest.navigation.next", { from: state.index + 1 }, "debug");
+    return { index: Math.min(state.session.length - 1, state.index + 1) };
+  }),
+  togglePause: () => set((state) => {
+    logEvent(state.isPaused ? "quest.resumed" : "quest.paused", { position: state.index + 1 });
+    return { isPaused: !state.isPaused };
+  }),
   updateRating: (mediaId, value) => set((state) => {
     const item = state.media.find((candidate) => candidate.id === mediaId);
-    return item === undefined ? {} : { ratings: { ...state.ratings, [mediaId]: { mediaId, value, previousValue: item.userRating, updatedAt: new Date().toISOString() } } };
+    if (item === undefined) {
+      logEvent("quest.review.update.missing", {}, "warn");
+      return {};
+    }
+    logEvent("quest.review.updated", { rating: value }, "debug");
+    return { ratings: { ...state.ratings, [mediaId]: { mediaId, value, previousValue: item.userRating, updatedAt: new Date().toISOString() } } };
   }),
-  reset: () => set(initialState),
+  reset: () => {
+    clearDiagnostics();
+    logEvent("quest.reset");
+    set(initialState);
+  },
 }), {
   name: "plex-rating-quest-session",
   storage: createJSONStorage(() => localStorage),
-  partialize: (state) => ({ ...state, accessToken: null, servers: [], selectedServer: null }),
+  partialize: (state) => ({
+    ...state,
+    accessToken: null,
+    servers: [],
+    selectedServer: null,
+    media: state.media.map((item) => ({ ...item, posterUrl: null, backdropUrl: null })),
+    session: state.session.map((item) => ({ ...item, posterUrl: null, backdropUrl: null })),
+  }),
 }));

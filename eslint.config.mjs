@@ -1,18 +1,20 @@
 import eslint from "@eslint/js";
+import jsxA11y from "eslint-plugin-jsx-a11y";
+import reactHooks from "eslint-plugin-react-hooks";
+import globals from "globals";
 import typescriptEslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
 
 export default defineConfig([
-  globalIgnores([".next/**", "dist/**", "build/**", "coverage/**", "next-env.d.ts", "examples/**", "db/**", "drizzle/**", "worker/**", "app/chatgpt-auth.ts", "*.config.{ts,mjs}"]),
+  globalIgnores(["dist/**", "coverage/**", "node_modules/**", "*.config.{ts,mjs}"]),
   eslint.configs.recommended,
-  ...nextVitals,
-  ...nextTs,
+  jsxA11y.flatConfigs.strict,
+  reactHooks.configs.flat["recommended-latest"],
   ...typescriptEslint.configs.strictTypeChecked,
   ...typescriptEslint.configs.stylisticTypeChecked,
   {
     languageOptions: {
+      globals: globals.browser,
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
     rules: {
@@ -27,7 +29,6 @@ export default defineConfig([
       "@typescript-eslint/strict-boolean-expressions": ["error", { allowNullableBoolean: false }],
       "@typescript-eslint/switch-exhaustiveness-check": "error",
       "@typescript-eslint/unbound-method": "off",
-      "@next/next/no-img-element": "off",
       eqeqeq: ["error", "always"],
       "no-alert": "error",
       "no-console": "error",
@@ -38,7 +39,13 @@ export default defineConfig([
     },
   },
   {
-    files: ["tests/**/*.{ts,tsx}", "vitest.config.ts"],
+    files: ["tests/**/*.{ts,tsx}"],
     rules: { "@typescript-eslint/explicit-function-return-type": "off" },
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    ...typescriptEslint.configs.disableTypeChecked,
+    languageOptions: { globals: globals.node, parserOptions: { projectService: false } },
+    rules: { ...typescriptEslint.configs.disableTypeChecked.rules, "@typescript-eslint/explicit-function-return-type": "off", "no-console": "error" },
   },
 ]);

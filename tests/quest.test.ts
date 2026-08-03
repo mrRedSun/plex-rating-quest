@@ -25,6 +25,17 @@ describe("filterMedia", () => {
     const result = filterMedia(DEMO_MEDIA, "movies", { ...DEFAULT_FILTERS, minimumWatchCount: 2 });
     expect(result.every((item) => item.kind === "movie" && item.watchCount >= 2)).toBe(true);
   });
+
+  it("never includes unwatched media in watched mode when the minimum is zero", () => {
+    const unwatched = { ...DEMO_MEDIA[0], id: "never-watched", watchCount: 0 };
+    const result = filterMedia([...DEMO_MEDIA, unwatched], "watched", {
+      ...DEFAULT_FILTERS,
+      minimumWatchCount: 0,
+    });
+
+    expect(result).not.toContainEqual(unwatched);
+    expect(result.every((item) => item.watchCount > 0)).toBe(true);
+  });
 });
 
 describe("quest summaries", () => {
