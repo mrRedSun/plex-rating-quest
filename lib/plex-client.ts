@@ -6,6 +6,7 @@ const PRODUCT = "Plex Rating Quest";
 const PIN_ENDPOINT = "https://plex.tv/api/v2/pins";
 const RESOURCE_ENDPOINT = "https://plex.tv/api/v2/resources";
 const USER_ENDPOINT = "https://plex.tv/api/v2/user";
+const COMMUNITY_ENDPOINT = "https://community.plex.tv/api";
 const PENDING_PIN_KEY = "plex-rating-quest-pending-pin";
 const PIN_MAX_AGE_MS = 10 * 60 * 1000;
 
@@ -29,6 +30,7 @@ const resourceSchema = z.array(
   }),
 );
 const userSchema = z.object({
+  uuid: z.string(),
   username: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
 });
@@ -68,6 +70,73 @@ const mediaSchema = z.object({
       .default([]),
   }),
 });
+const historyImageSchema = z
+  .object({
+    coverArt: z.string().nullable().optional(),
+    coverPoster: z.string().nullable().optional(),
+    thumbnail: z.string().nullable().optional(),
+    art: z.string().nullable().optional(),
+  })
+  .nullable()
+  .optional();
+const historyMetadataSchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  title: z.string(),
+  type: z.enum(["MOVIE", "SHOW", "SEASON", "EPISODE"]),
+  year: z.number().nullable().optional(),
+  publishedAt: z.string().nullable().optional(),
+  originallyAvailableAt: z.string().nullable().optional(),
+  images: historyImageSchema,
+  grandparent: z
+    .object({
+      key: z.string(),
+      title: z.string(),
+      publishedAt: z.string().nullable().optional(),
+      images: historyImageSchema,
+    })
+    .nullable()
+    .optional(),
+});
+const historyResponseSchema = z.object({
+  data: z.object({
+    user: z.object({
+      watchHistory: z.object({
+        nodes: z.array(
+          z.object({
+            id: z.string(),
+            date: z.string(),
+            metadataItem: historyMetadataSchema,
+          }),
+        ),
+        pageInfo: z.object({
+          hasNextPage: z.boolean(),
+          endCursor: z.string().nullable().optional(),
+        }),
+      }),
+    }),
+  }),
+  errors: z.array(z.object({ message: z.string() })).optional(),
+});
+
+const WATCH_HISTORY_QUERY = `
+  query GetWatchHistoryHub($uuid: ID!, $first: PaginationInt!, $after: String) {
+    user(id: $uuid) {
+      watchHistory(first: $first, after: $after) {
+        nodes {
+          id
+          date
+          metadataItem {
+            id key title type year publishedAt originallyAvailableAt
+            images { coverArt coverPoster thumbnail art }
+            grandparent { key title publishedAt images { coverArt coverPoster thumbnail art } }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+`;
 
 export interface PlexPin {
   readonly id: number;
@@ -250,7 +319,141 @@ export async function fetchPlexAccount(token: string): Promise<PlexAccount> {
         ? title
         : "Plex member";
   logEvent("plex.account.completed");
-  return { displayName };
+  return { id: account.uuid, displayName };
+}
+
+type HistoryNode = z.infer<
+  typeof historyResponseSchema
+>["data"]["user"]["watchHistory"]["nodes"][number];
+
+function yearFromDate(value: string | null | undefined): number {
+  if (value === undefined || value === null) return 0;
+  const year = Number.parseInt(value.slice(0, 4), 10);
+  return Number.isFinite(year) ? year : 0;
+}
+
+function firstImage(
+  images: z.infer<typeof historyImageSchema>,
+  purpose: "poster" | "backdrop",
+): string | null {
+  if (images === undefined || images === null) return null;
+  return purpose === "poster"
+    ? (images.coverPoster ?? images.thumbnail ?? null)
+    : (images.art ?? images.coverArt ?? null);
+}
+
+function historyIdentity(node: HistoryNode): {
+  id: string;
+  title: string;
+  year: number;
+  kind: "movie" | "show";
+  posterUrl: string | null;
+  backdropUrl: string | null;
+} | null {
+  const item = node.metadataItem;
+  if (item.type === "MOVIE")
+    return {
+      id: item.id,
+      title: item.title,
+      year: item.year ?? yearFromDate(item.originallyAvailableAt),
+      kind: "movie",
+      posterUrl: firstImage(item.images, "poster"),
+      backdropUrl: firstImage(item.images, "backdrop"),
+    };
+  const show = item.type === "SHOW" ? item : item.grandparent;
+  if (show === undefined || show === null) return null;
+  return {
+    id: show.key.split("/").filter(Boolean).at(-1) ?? item.id,
+    title: show.title,
+    year: yearFromDate(show.publishedAt),
+    kind: "show",
+    posterUrl: firstImage(show.images, "poster"),
+    backdropUrl: firstImage(show.images, "backdrop"),
+  };
+}
+
+async function fetchHistoryPage(
+  token: string,
+  accountId: string,
+  after: string | null,
+): Promise<z.infer<typeof historyResponseSchema>> {
+  const requestHeaders = new Headers(headers(token));
+  requestHeaders.set("Content-Type", "application/json");
+  const response = await checkedFetch(
+    "history.page.fetch",
+    COMMUNITY_ENDPOINT,
+    {
+      method: "POST",
+      headers: requestHeaders,
+      body: JSON.stringify({
+        query: WATCH_HISTORY_QUERY,
+        variables: { uuid: accountId, first: 100, after },
+      }),
+    },
+  );
+  return historyResponseSchema.parse(await response.json());
+}
+
+function groupHistoryNodes(nodes: readonly HistoryNode[]): MediaItem[] {
+  const grouped = new Map<string, MediaItem>();
+  for (const node of nodes) {
+    const identity = historyIdentity(node);
+    if (identity === null) continue;
+    const key = `${identity.kind}:${identity.id}`;
+    const existing = grouped.get(key);
+    grouped.set(key, {
+      id: `history:${identity.id}`,
+      title: identity.title,
+      year: identity.year,
+      kind: identity.kind,
+      runtimeMinutes: 0,
+      genres: [],
+      watchCount: (existing?.watchCount ?? 0) + 1,
+      watchedAt:
+        existing === undefined || node.date > existing.watchedAt
+          ? node.date
+          : existing.watchedAt,
+      posterUrl: identity.posterUrl ?? existing?.posterUrl ?? null,
+      backdropUrl: identity.backdropUrl ?? existing?.backdropUrl ?? null,
+      audienceRating: null,
+      criticRating: null,
+      userRating: null,
+      libraryId: "watch-history",
+    });
+  }
+  return [...grouped.values()];
+}
+
+async function fetchPlexWatchHistory(
+  token: string,
+  accountId: string,
+): Promise<MediaItem[]> {
+  logEvent("plex.history.started");
+  const nodes: HistoryNode[] = [];
+  let after: string | null = null;
+  let page = 0;
+  do {
+    page += 1;
+    const parsed = await fetchHistoryPage(token, accountId, after);
+    const error = parsed.errors?.[0];
+    if (error !== undefined)
+      throw new Error(`Plex history failed: ${error.message}`);
+    const history = parsed.data.user.watchHistory;
+    nodes.push(...history.nodes);
+    after = history.pageInfo.hasNextPage
+      ? (history.pageInfo.endCursor ?? null)
+      : null;
+    if (history.pageInfo.hasNextPage && after === null)
+      throw new Error("Plex history pagination returned no cursor");
+  } while (after !== null);
+
+  const grouped = groupHistoryNodes(nodes);
+  logEvent("plex.history.completed", {
+    pageCount: page,
+    eventCount: nodes.length,
+    titleCount: grouped.length,
+  });
+  return grouped;
 }
 
 export async function fetchPlexLibraries(
@@ -275,6 +478,7 @@ export async function fetchPlexLibraries(
 export async function fetchPlexMedia(
   server: PlexServer,
   libraries: readonly PlexLibrary[],
+  account?: { readonly id: string; readonly token: string },
 ): Promise<MediaItem[]> {
   logEvent("plex.media.started", { libraryCount: libraries.length });
   const results = await Promise.all(
@@ -312,7 +516,38 @@ export async function fetchPlexMedia(
       }));
     }),
   );
-  const media = results.flat();
+  const libraryMedia = results.flat();
+  if (account === undefined) {
+    logEvent("plex.media.completed", { mediaCount: libraryMedia.length });
+    return libraryMedia;
+  }
+  const historyMedia = await fetchPlexWatchHistory(account.token, account.id);
+  const normalize = (value: string): string =>
+    value.toLocaleLowerCase().replaceAll(/[^a-z0-9]/g, "");
+  const historyByTitle = new Map(
+    historyMedia.map((item) => [
+      `${item.kind}:${normalize(item.title)}:${item.year}`,
+      item,
+    ]),
+  );
+  const matchedHistoryIds = new Set<string>();
+  const mergedLibraryMedia = libraryMedia.map((item) => {
+    const historical =
+      historyByTitle.get(
+        `${item.kind}:${normalize(item.title)}:${item.year}`,
+      ) ?? historyByTitle.get(`${item.kind}:${normalize(item.title)}:0`);
+    if (historical === undefined) return item;
+    matchedHistoryIds.add(historical.id);
+    return {
+      ...item,
+      watchCount: Math.max(item.watchCount, historical.watchCount),
+      watchedAt: historical.watchedAt,
+    };
+  });
+  const media = [
+    ...mergedLibraryMedia,
+    ...historyMedia.filter((item) => !matchedHistoryIds.has(item.id)),
+  ];
   logEvent("plex.media.completed", { mediaCount: media.length });
   return media;
 }

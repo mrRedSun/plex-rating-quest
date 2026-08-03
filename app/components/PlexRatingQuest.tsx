@@ -119,6 +119,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<readonly PlexServer[]>([]);
   const [token, setToken] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(null);
   const [accountName, setAccountName] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const setPlexData = useQuestStore((state) => state.setPlexData);
@@ -126,12 +127,16 @@ const Welcome = observer(function Welcome(): React.ReactElement {
   const finishConnection = useCallback(
     async (
       accessToken: string,
+      connectedAccountId: string,
       connectedAccountName: string,
       server: PlexServer,
       servers: readonly PlexServer[],
     ): Promise<void> => {
       const libraries = await fetchPlexLibraries(server);
-      const media = await fetchPlexMedia(server, libraries);
+      const media = await fetchPlexMedia(server, libraries, {
+        id: connectedAccountId,
+        token: accessToken,
+      });
       setPlexData({
         token: accessToken,
         accountName: connectedAccountName,
@@ -157,13 +162,20 @@ const Welcome = observer(function Welcome(): React.ReactElement {
         throw new Error("No reachable Plex Media Server was found.");
       if (servers.length > 1) {
         setToken(accessToken);
+        setAccountId(account.id);
         setChoices(servers);
         setStatus("choosing");
         return;
       }
       const server = servers[0];
       if (server === undefined) throw new Error("No Plex server was selected.");
-      await finishConnection(accessToken, account.displayName, server, servers);
+      await finishConnection(
+        accessToken,
+        account.id,
+        account.displayName,
+        server,
+        servers,
+      );
     },
     [finishConnection],
   );
@@ -336,9 +348,10 @@ const Welcome = observer(function Welcome(): React.ReactElement {
                 <button
                   key={`${server.name}-${server.uri}`}
                   onClick={() => {
-                    if (token !== null)
+                    if (token !== null && accountId !== null)
                       void finishConnection(
                         token,
+                        accountId,
                         accountName ?? "Plex member",
                         server,
                         choices,

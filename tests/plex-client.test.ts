@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearPendingPlexPin,
   fetchPlexAccount,
+  fetchPlexMedia,
   readPendingPlexPin,
   savePendingPlexPin,
 } from "../lib/plex-client";
@@ -45,7 +46,11 @@ describe("resumable Plex authentication", () => {
   it("loads the visible Plex username without exposing the token", async () => {
     const request = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ username: "movie-fan", title: "Movie Fan" }),
+        JSON.stringify({
+          uuid: "account-id",
+          username: "movie-fan",
+          title: "Movie Fan",
+        }),
         {
           status: 200,
         },
@@ -54,8 +59,90 @@ describe("resumable Plex authentication", () => {
     vi.stubGlobal("fetch", request);
 
     await expect(fetchPlexAccount("private-token")).resolves.toEqual({
+      id: "account-id",
       displayName: "movie-fan",
     });
+    expect(
+      window.sessionStorage.getItem("plex-rating-quest-diagnostics"),
+    ).not.toContain("private-token");
+  });
+
+  it("loads account-wide history and aggregates episodes into shows", async () => {
+    const request = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            user: {
+              watchHistory: {
+                nodes: [
+                  {
+                    id: "event-1",
+                    date: "2025-01-01T00:00:00Z",
+                    metadataItem: {
+                      id: "episode-1",
+                      key: "/library/metadata/episode-1",
+                      title: "Pilot",
+                      type: "EPISODE",
+                      grandparent: {
+                        key: "/library/metadata/show-1",
+                        title: "Old Favorite",
+                        publishedAt: "2012-01-01",
+                        images: {
+                          coverPoster: "https://images.example/poster.jpg",
+                        },
+                      },
+                    },
+                  },
+                  {
+                    id: "event-2",
+                    date: "2026-01-01T00:00:00Z",
+                    metadataItem: {
+                      id: "episode-2",
+                      key: "/library/metadata/episode-2",
+                      title: "Finale",
+                      type: "EPISODE",
+                      grandparent: {
+                        key: "/library/metadata/show-1",
+                        title: "Old Favorite",
+                        publishedAt: "2012-01-01",
+                      },
+                    },
+                  },
+                ],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", request);
+
+    const media = await fetchPlexMedia(
+      {
+        name: "Living Room",
+        uri: "https://server.example",
+        accessToken: "server-token",
+      },
+      [],
+      { id: "account-id", token: "private-token" },
+    );
+
+    expect(media).toEqual([
+      expect.objectContaining({
+        id: "history:show-1",
+        title: "Old Favorite",
+        kind: "show",
+        year: 2012,
+        watchCount: 2,
+        watchedAt: "2026-01-01T00:00:00Z",
+      }),
+    ]);
+    expect(request).toHaveBeenCalledWith(
+      "https://community.plex.tv/api",
+      expect.objectContaining({ method: "POST" }),
+    );
     expect(
       window.sessionStorage.getItem("plex-rating-quest-diagnostics"),
     ).not.toContain("private-token");
