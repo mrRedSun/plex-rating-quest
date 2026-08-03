@@ -30,6 +30,7 @@ import {
   buildPlexAuthUrl,
   clearPendingPlexPin,
   createPlexPin,
+  fetchPlexAccount,
   fetchPlexLibraries,
   fetchPlexMedia,
   fetchPlexServers,
@@ -39,6 +40,11 @@ import {
   waitForPlexToken,
 } from "../../lib/plex-client";
 import { logError, logEvent } from "../../lib/diagnostics";
+import {
+  HISTORY_STAGE_KEY,
+  pathForStage,
+  stageFromHistoryState,
+} from "../../lib/navigation";
 import {
   calculateStats,
   DEFAULT_FILTERS,
@@ -54,6 +60,7 @@ import type {
 import { useQuestStore } from "../../store/quest-store";
 import { TierListStudio } from "./TierListStudio";
 import {
+  AccountControls,
   Brand,
   DiagnosticsButton,
   PrimaryButton,
@@ -112,18 +119,27 @@ const Welcome = observer(function Welcome(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<readonly PlexServer[]>([]);
   const [token, setToken] = useState<string | null>(null);
+  const [accountName, setAccountName] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const setPlexData = useQuestStore((state) => state.setPlexData);
 
   const finishConnection = useCallback(
     async (
       accessToken: string,
+      connectedAccountName: string,
       server: PlexServer,
       servers: readonly PlexServer[],
     ): Promise<void> => {
       const libraries = await fetchPlexLibraries(server);
       const media = await fetchPlexMedia(server, libraries);
-      setPlexData(accessToken, servers, server, libraries, media);
+      setPlexData({
+        token: accessToken,
+        accountName: connectedAccountName,
+        servers,
+        selectedServer: server,
+        libraries,
+        media,
+      });
     },
     [setPlexData],
   );
@@ -132,7 +148,11 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     async (pin: PlexPin, controller: AbortController): Promise<void> => {
       const accessToken = await waitForPlexToken(pin, controller.signal);
       clearPendingPlexPin();
-      const servers = await fetchPlexServers(accessToken);
+      const [account, servers] = await Promise.all([
+        fetchPlexAccount(accessToken),
+        fetchPlexServers(accessToken),
+      ]);
+      setAccountName(account.displayName);
       if (servers.length === 0)
         throw new Error("No reachable Plex Media Server was found.");
       if (servers.length > 1) {
@@ -143,7 +163,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
       }
       const server = servers[0];
       if (server === undefined) throw new Error("No Plex server was selected.");
-      await finishConnection(accessToken, server, servers);
+      await finishConnection(accessToken, account.displayName, server, servers);
     },
     [finishConnection],
   );
@@ -317,7 +337,12 @@ const Welcome = observer(function Welcome(): React.ReactElement {
                   key={`${server.name}-${server.uri}`}
                   onClick={() => {
                     if (token !== null)
-                      void finishConnection(token, server, choices);
+                      void finishConnection(
+                        token,
+                        accountName ?? "Plex member",
+                        server,
+                        choices,
+                      );
                   }}
                 >
                   <span>{server.name}</span>
@@ -344,7 +369,10 @@ const ModeSelect = observer(function ModeSelect(): React.ReactElement {
     <Shell compact>
       <header className="topbar">
         <Brand />
-        <span className="step-label">Step 1 of 2</span>
+        <div className="topbar-actions">
+          <span className="step-label">Step 1 of 2</span>
+          <AccountControls />
+        </div>
       </header>
       <section className="content-panel">
         <div className="section-heading">
@@ -427,7 +455,10 @@ const Filters = observer(function Filters(): React.ReactElement {
     <Shell compact>
       <header className="topbar">
         <Brand />
-        <span className="step-label">Step 2 of 2</span>
+        <div className="topbar-actions">
+          <span className="step-label">Step 2 of 2</span>
+          <AccountControls />
+        </div>
       </header>
       <section className="content-panel filters-panel">
         <div className="filter-hero">
@@ -733,13 +764,16 @@ const RatingGame = observer(function RatingGame(): React.ReactElement {
             {progress}% · {session.length - index - 1} remaining
           </small>
         </div>
-        <button
-          className="icon-button"
-          aria-label="Pause quest"
-          onClick={togglePause}
-        >
-          <CirclePause />
-        </button>
+        <div className="topbar-actions">
+          <AccountControls />
+          <button
+            className="icon-button"
+            aria-label="Pause quest"
+            onClick={togglePause}
+          >
+            <CirclePause />
+          </button>
+        </div>
       </header>
       <AnimatePresence mode="wait">
         <motion.section
@@ -824,7 +858,6 @@ const RatingGame = observer(function RatingGame(): React.ReactElement {
           Next <ArrowRight size={17} />
         </button>
       </footer>
-      <DiagnosticsButton />
       {!isPaused ? null : <PauseMenu />}
     </main>
   );
@@ -864,6 +897,7 @@ const PauseMenu = observer(function PauseMenu(): React.ReactElement {
         <button className="danger-link" onClick={reset}>
           <LogOut size={16} /> Leave quest
         </button>
+        <DiagnosticsButton />
       </motion.div>
     </div>
   );
@@ -896,9 +930,12 @@ const Review = observer(function Review(): React.ReactElement {
     <Shell compact>
       <header className="topbar">
         <Brand />
-        <span className="step-label">
-          <ShieldCheck size={15} /> Nothing sent yet
-        </span>
+        <div className="topbar-actions">
+          <span className="step-label">
+            <ShieldCheck size={15} /> Nothing sent yet
+          </span>
+          <AccountControls />
+        </div>
       </header>
       <section className="review-panel">
         <div className="review-heading">
@@ -1128,11 +1165,57 @@ const Complete = observer(function Complete(): React.ReactElement {
 export const PlexRatingQuest = observer(
   function PlexRatingQuest(): React.ReactElement {
     const stage = useQuestStore((state) => state.stage);
+    const mediaCount = useQuestStore((state) => state.media.length);
+    const setStage = useQuestStore((state) => state.setStage);
     const reducedMotion = useReducedMotion();
+    const historyInitialized = useRef(false);
+    const skipNextHistoryWrite = useRef(false);
     useEffect(() => {
       document.documentElement.dataset.motion =
         reducedMotion === true ? "reduced" : "full";
     }, [reducedMotion]);
+    useEffect(() => {
+      const state = { [HISTORY_STAGE_KEY]: stage };
+      if (!historyInitialized.current) {
+        window.history.replaceState(state, "", pathForStage(stage));
+        historyInitialized.current = true;
+        return;
+      }
+      if (skipNextHistoryWrite.current) {
+        skipNextHistoryWrite.current = false;
+        return;
+      }
+      window.history.pushState(state, "", pathForStage(stage));
+    }, [stage]);
+    useEffect(() => {
+      const handlePopState = (event: PopStateEvent): void => {
+        const requestedStage = stageFromHistoryState(event.state);
+        const nextStage =
+          requestedStage === null ||
+          (requestedStage !== "welcome" && mediaCount === 0)
+            ? "welcome"
+            : requestedStage;
+        if (nextStage === stage) {
+          if (nextStage !== requestedStage)
+            window.history.replaceState(
+              { [HISTORY_STAGE_KEY]: nextStage },
+              "",
+              pathForStage(nextStage),
+            );
+          return;
+        }
+        skipNextHistoryWrite.current = true;
+        setStage(nextStage);
+        if (nextStage !== requestedStage)
+          window.history.replaceState(
+            { [HISTORY_STAGE_KEY]: nextStage },
+            "",
+            pathForStage(nextStage),
+          );
+      };
+      window.addEventListener("popstate", handlePopState);
+      return () => window.removeEventListener("popstate", handlePopState);
+    }, [mediaCount, setStage, stage]);
     if (stage === "welcome") return <Welcome />;
     if (stage === "mode") return <ModeSelect />;
     if (stage === "filters") return <Filters />;
