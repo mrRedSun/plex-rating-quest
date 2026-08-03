@@ -54,14 +54,13 @@ Deployment agents must use `docker compose pull`. Do not run `docker build` or `
 
 ## Configuration
 
-Edit `.env` before starting the service:
+To change the host port, edit `.env` before starting the service:
 
-| Variable            | Default                                     | Purpose                             |
-| ------------------- | ------------------------------------------- | ----------------------------------- |
-| `PLEX_RATING_IMAGE` | `ghcr.io/mrredsun/plex-rating-quest:v1.1.0` | Immutable published image tag       |
-| `PLEX_RATING_PORT`  | `8080`                                      | Host port mapped to the application |
+| Variable           | Default | Purpose                             |
+| ------------------ | ------- | ----------------------------------- |
+| `PLEX_RATING_PORT` | `8080`  | Host port mapped to the application |
 
-Prefer a `v<version>` or `sha-<commit>` image tag. The mutable `main` tag is available for testing but should not be used as production provenance.
+The immutable application image is pinned directly in `compose.yaml`, which is the deployment source of truth.
 
 ## Operations
 
@@ -73,8 +72,7 @@ docker compose logs --tail=200 -f plex-rating-quest
 
 Upgrade to a published version:
 
-1. Change `PLEX_RATING_IMAGE` in `.env` to the approved immutable tag.
-2. Pull and recreate the service.
+Pull the latest repository changes, then pull and recreate the service. The updated repository supplies the approved image version in `compose.yaml`.
 
 ```bash
 git pull --ff-only
@@ -83,7 +81,7 @@ docker compose up -d --remove-orphans
 curl --fail --show-error http://127.0.0.1:8080/healthz
 ```
 
-Roll back by restoring the previous image tag in `.env`, then run the same `docker compose pull` and `docker compose up -d --remove-orphans` commands.
+Roll back by restoring the previous pinned `image:` value in `compose.yaml`, then run the same `docker compose pull` and `docker compose up -d --remove-orphans` commands.
 
 Stop the application without deleting images or unrelated Docker data:
 
