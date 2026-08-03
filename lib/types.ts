@@ -49,7 +49,12 @@ export type QuestStage =
   | "rating"
   | "review"
   | "applying"
-  | "complete";
+  | "complete"
+  | "tier-list";
+
+export const TIER_IDS = ["S", "A", "B", "C", "D", "unranked"] as const;
+export type TierId = (typeof TIER_IDS)[number];
+export type TierAssignments = Readonly<Record<string, TierId>>;
 
 export interface PlexServer {
   readonly name: string;

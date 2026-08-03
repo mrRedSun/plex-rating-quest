@@ -12,6 +12,8 @@ import type {
   QuestFilters,
   QuestMode,
   QuestStage,
+  TierAssignments,
+  TierId,
 } from "../lib/types";
 
 const STORAGE_KEY = "plex-rating-quest-session";
@@ -30,6 +32,7 @@ interface PersistedQuestState {
   readonly skips: number;
   readonly startedAt: string | null;
   readonly isPaused: boolean;
+  readonly tierAssignments: TierAssignments;
 }
 
 function stripArtwork(items: readonly MediaItem[]): readonly MediaItem[] {
@@ -65,6 +68,7 @@ export class QuestStore {
   skips = 0;
   startedAt: string | null = null;
   isPaused = false;
+  tierAssignments: TierAssignments = {};
 
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
@@ -88,6 +92,7 @@ export class QuestStore {
         skips: this.skips,
         startedAt: this.startedAt,
         isPaused: this.isPaused,
+        tierAssignments: this.tierAssignments,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     });
@@ -237,6 +242,16 @@ export class QuestStore {
         updatedAt: new Date().toISOString(),
       },
     };
+  }
+
+  assignTier(mediaId: string, tier: TierId): void {
+    this.tierAssignments = { ...this.tierAssignments, [mediaId]: tier };
+    logEvent("tier_list.assigned", { tier }, "debug");
+  }
+
+  clearTierList(): void {
+    this.tierAssignments = {};
+    logEvent("tier_list.cleared");
   }
 
   reset(): void {
