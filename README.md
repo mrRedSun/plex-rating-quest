@@ -44,6 +44,15 @@ Open `http://YOUR_SERVER:8080`. To use another host port:
 PLEX_RATING_PORT=9090 docker compose up -d
 ```
 
+Successful `main` builds also publish the exact scanned image to private GHCR with immutable `sha-<commit>` and `v<version>` tags plus a `main` convenience alias. Authenticate with a GitHub token that can read packages before pulling:
+
+```bash
+docker login ghcr.io
+docker pull ghcr.io/mrredsun/plex-rating-quest:main
+```
+
+Local Compose builds remain the default and require no registry credentials.
+
 For Plex authentication, put the container behind an HTTPS reverse proxy with a stable hostname. The app opens Plex authentication in a pop-up; allow pop-ups for the hostname. Plain HTTP is appropriate only for local demo testing.
 
 ### Operations
