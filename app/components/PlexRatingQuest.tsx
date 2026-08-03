@@ -113,22 +113,21 @@ function formatDate(value: string): string {
 
 const Welcome = observer(function Welcome(): React.ReactElement {
   const startDemo = useQuestStore((state) => state.startDemo);
-  const [status, setStatus] = useState<"idle" | "connecting" | "choosing">(
-    "idle",
-  );
+  const [status, setStatus] = useState<
+    "idle" | "authenticating" | "pulling" | "choosing"
+  >("idle");
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<readonly PlexServer[]>([]);
-  const [token, setToken] = useState<string | null>(null);
-  const [accountId, setAccountId] = useState<string | null>(null);
-  const [accountName, setAccountName] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const token = useQuestStore((state) => state.accessToken);
+  const accountId = useQuestStore((state) => state.accountId);
+  const setPlexAuth = useQuestStore((state) => state.setPlexAuth);
   const setPlexData = useQuestStore((state) => state.setPlexData);
 
   const finishConnection = useCallback(
     async (
       accessToken: string,
       connectedAccountId: string,
-      connectedAccountName: string,
       server: PlexServer,
       servers: readonly PlexServer[],
     ): Promise<void> => {
@@ -138,8 +137,6 @@ const Welcome = observer(function Welcome(): React.ReactElement {
         token: accessToken,
       });
       setPlexData({
-        token: accessToken,
-        accountName: connectedAccountName,
         servers,
         selectedServer: server,
         libraries,
@@ -153,31 +150,15 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     async (pin: PlexPin, controller: AbortController): Promise<void> => {
       const accessToken = await waitForPlexToken(pin, controller.signal);
       clearPendingPlexPin();
-      const [account, servers] = await Promise.all([
-        fetchPlexAccount(accessToken),
-        fetchPlexServers(accessToken),
-      ]);
-      setAccountName(account.displayName);
-      if (servers.length === 0)
-        throw new Error("No reachable Plex Media Server was found.");
-      if (servers.length > 1) {
-        setToken(accessToken);
-        setAccountId(account.id);
-        setChoices(servers);
-        setStatus("choosing");
-        return;
-      }
-      const server = servers[0];
-      if (server === undefined) throw new Error("No Plex server was selected.");
-      await finishConnection(
-        accessToken,
-        account.id,
-        account.displayName,
-        server,
-        servers,
-      );
+      const account = await fetchPlexAccount(accessToken);
+      setPlexAuth({
+        token: accessToken,
+        accountId: account.id,
+        accountName: account.displayName,
+      });
+      setStatus("idle");
     },
-    [finishConnection],
+    [setPlexAuth],
   );
 
   const handleConnectionFailure = useCallback((reason: unknown): void => {
@@ -193,7 +174,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
   const connect = useCallback(async (): Promise<void> => {
     logEvent("auth.connection.started");
     setError(null);
-    setStatus("connecting");
+    setStatus("authenticating");
     const controller = new AbortController();
     abortRef.current = controller;
     const popup = window.open(
@@ -218,12 +199,56 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     }
   }, [finishPin, handleConnectionFailure]);
 
+  const pullData = useCallback(async (): Promise<void> => {
+    if (token === null || accountId === null) return;
+    setError(null);
+    setStatus("pulling");
+    try {
+      const servers = await fetchPlexServers(token);
+      if (servers.length === 0)
+        throw new Error("No reachable Plex Media Server was found.");
+      if (servers.length > 1) {
+        setChoices(servers);
+        setStatus("choosing");
+        return;
+      }
+      const server = servers[0];
+      if (server === undefined) throw new Error("No Plex server was selected.");
+      await finishConnection(token, accountId, server, servers);
+    } catch (reason) {
+      logError("plex.data.pull.failed", reason);
+      setError(
+        reason instanceof Error ? reason.message : "Plex data pull failed.",
+      );
+      setStatus("idle");
+    }
+  }, [accountId, finishConnection, token]);
+
+  const selectServer = useCallback(
+    async (server: PlexServer): Promise<void> => {
+      if (token === null || accountId === null) return;
+      setStatus("pulling");
+      setError(null);
+      try {
+        await finishConnection(token, accountId, server, choices);
+      } catch (reason) {
+        logError("plex.data.pull.failed", reason);
+        setError(
+          reason instanceof Error ? reason.message : "Plex data pull failed.",
+        );
+        setChoices([]);
+        setStatus("idle");
+      }
+    },
+    [accountId, choices, finishConnection, token],
+  );
+
   useEffect(() => {
     const pendingPin = readPendingPlexPin();
     if (pendingPin === null) return;
     logEvent("auth.connection.resumed");
     setError(null);
-    setStatus("connecting");
+    setStatus("authenticating");
     const controller = new AbortController();
     abortRef.current = controller;
     void finishPin(pendingPin, controller).catch(handleConnectionFailure);
@@ -259,22 +284,42 @@ const Welcome = observer(function Welcome(): React.ReactElement {
             game. Nothing reaches Plex until you say so.
           </p>
           <div className="welcome-actions">
-            <PrimaryButton
-              onClick={() => {
-                void connect();
-              }}
-              disabled={status !== "idle"}
-            >
-              {status === "connecting" ? (
-                <>
-                  <LoaderCircle className="spin" size={18} /> Waiting for Plex
-                </>
-              ) : (
-                <>
-                  Continue with Plex <ChevronRight size={18} />
-                </>
-              )}
-            </PrimaryButton>
+            {token === null ? (
+              <PrimaryButton
+                onClick={() => {
+                  void connect();
+                }}
+                disabled={status !== "idle"}
+              >
+                {status === "authenticating" ? (
+                  <>
+                    <LoaderCircle className="spin" size={18} /> Waiting for Plex
+                  </>
+                ) : (
+                  <>
+                    Continue with Plex <ChevronRight size={18} />
+                  </>
+                )}
+              </PrimaryButton>
+            ) : (
+              <PrimaryButton
+                onClick={() => {
+                  void pullData();
+                }}
+                disabled={status !== "idle"}
+              >
+                {status === "pulling" ? (
+                  <>
+                    <LoaderCircle className="spin" size={18} /> Loading Plex
+                    data
+                  </>
+                ) : (
+                  <>
+                    Load my Plex data <ChevronRight size={18} />
+                  </>
+                )}
+              </PrimaryButton>
+            )}
             <PrimaryButton variant="secondary" onClick={startDemo}>
               Explore demo
             </PrimaryButton>
@@ -348,14 +393,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
                 <button
                   key={`${server.name}-${server.uri}`}
                   onClick={() => {
-                    if (token !== null && accountId !== null)
-                      void finishConnection(
-                        token,
-                        accountId,
-                        accountName ?? "Plex member",
-                        server,
-                        choices,
-                      );
+                    void selectServer(server);
                   }}
                 >
                   <span>{server.name}</span>
