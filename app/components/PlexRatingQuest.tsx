@@ -28,10 +28,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyPlexRating,
   buildPlexAuthUrl,
+  clearPendingPlexPin,
   createPlexPin,
   fetchPlexLibraries,
   fetchPlexMedia,
   fetchPlexServers,
+  readPendingPlexPin,
+  savePendingPlexPin,
+  type PlexPin,
   waitForPlexToken,
 } from "../../lib/plex-client";
 import { logError, logEvent } from "../../lib/diagnostics";
@@ -124,6 +128,36 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     [setPlexData],
   );
 
+  const finishPin = useCallback(
+    async (pin: PlexPin, controller: AbortController): Promise<void> => {
+      const accessToken = await waitForPlexToken(pin, controller.signal);
+      clearPendingPlexPin();
+      const servers = await fetchPlexServers(accessToken);
+      if (servers.length === 0)
+        throw new Error("No reachable Plex Media Server was found.");
+      if (servers.length > 1) {
+        setToken(accessToken);
+        setChoices(servers);
+        setStatus("choosing");
+        return;
+      }
+      const server = servers[0];
+      if (server === undefined) throw new Error("No Plex server was selected.");
+      await finishConnection(accessToken, server, servers);
+    },
+    [finishConnection],
+  );
+
+  const handleConnectionFailure = useCallback((reason: unknown): void => {
+    logError("auth.connection.failed", reason);
+    if (reason instanceof DOMException && reason.name === "AbortError") return;
+    clearPendingPlexPin();
+    setError(
+      reason instanceof Error ? reason.message : "Plex connection failed.",
+    );
+    setStatus("idle");
+  }, []);
+
   const connect = useCallback(async (): Promise<void> => {
     logEvent("auth.connection.started");
     setError(null);
@@ -142,32 +176,27 @@ const Welcome = observer(function Welcome(): React.ReactElement {
         );
       popup.document.title = "Connecting to Plex…";
       const pin = await createPlexPin();
+      savePendingPlexPin(pin);
       popup.location.href = buildPlexAuthUrl(pin);
-      const accessToken = await waitForPlexToken(pin, controller.signal);
+      await finishPin(pin, controller);
       popup.close();
-      const servers = await fetchPlexServers(accessToken);
-      if (servers.length === 0)
-        throw new Error("No reachable Plex Media Server was found.");
-      if (servers.length > 1) {
-        setToken(accessToken);
-        setChoices(servers);
-        setStatus("choosing");
-      } else {
-        const server = servers[0];
-        if (server === undefined)
-          throw new Error("No Plex server was selected.");
-        await finishConnection(accessToken, server, servers);
-      }
     } catch (reason) {
       popup?.close();
-      logError("auth.connection.failed", reason);
-      if (!(reason instanceof DOMException && reason.name === "AbortError"))
-        setError(
-          reason instanceof Error ? reason.message : "Plex connection failed.",
-        );
-      setStatus("idle");
+      handleConnectionFailure(reason);
     }
-  }, [finishConnection]);
+  }, [finishPin, handleConnectionFailure]);
+
+  useEffect(() => {
+    const pendingPin = readPendingPlexPin();
+    if (pendingPin === null) return;
+    logEvent("auth.connection.resumed");
+    setError(null);
+    setStatus("connecting");
+    const controller = new AbortController();
+    abortRef.current = controller;
+    void finishPin(pendingPin, controller).catch(handleConnectionFailure);
+    return () => controller.abort();
+  }, [finishPin, handleConnectionFailure]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
