@@ -63,6 +63,7 @@ export interface PlexServer {
 }
 
 export interface PlexAccount {
+  readonly id: string;
   readonly displayName: string;
 }
 
