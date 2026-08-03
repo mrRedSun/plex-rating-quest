@@ -1,6 +1,8 @@
-import { Bug, Star } from "lucide-react";
+import { Bug, LogOut, Star, UserRound } from "lucide-react";
+import { observer } from "mobx-react-lite";
 import { useState } from "react";
 import { downloadDiagnosticReport } from "../../lib/diagnostics";
+import { useQuestStore } from "../../store/quest-store";
 
 export function Brand(): React.ReactElement {
   return (
@@ -51,6 +53,35 @@ export function DiagnosticsButton(): React.ReactElement {
   );
 }
 
+export const AccountControls = observer(
+  function AccountControls(): React.ReactElement | null {
+    const accessToken = useQuestStore((state) => state.accessToken);
+    const userName = useQuestStore((state) => state.userName);
+    const serverName = useQuestStore(
+      (state) => state.selectedServer?.name ?? null,
+    );
+    const logout = useQuestStore((state) => state.logout);
+    if (accessToken === null) return null;
+    return (
+      <div className="account-controls" aria-label="Connected Plex account">
+        <UserRound aria-hidden="true" size={16} />
+        <span>
+          <strong>{userName}</strong>
+          {serverName === null ? null : <small>{serverName}</small>}
+        </span>
+        <button
+          type="button"
+          onClick={logout}
+          aria-label={`Log out ${userName}`}
+        >
+          <LogOut aria-hidden="true" size={15} />
+          <span>Log out</span>
+        </button>
+      </div>
+    );
+  },
+);
+
 export function Shell({
   children,
   compact = false,
@@ -64,7 +95,10 @@ export function Shell({
       <div className="aurora aurora-one" />
       <div className="aurora aurora-two" />
       {children}
-      <DiagnosticsButton />
+      <footer className="shell-utilities">
+        <AccountControls />
+        <DiagnosticsButton />
+      </footer>
     </main>
   );
 }

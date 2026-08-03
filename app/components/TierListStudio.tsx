@@ -5,6 +5,7 @@ import {
   GripVertical,
   RotateCcw,
   Sparkles,
+  Trash2,
   Trophy,
 } from "lucide-react";
 import { observer } from "mobx-react-lite";
@@ -26,7 +27,7 @@ import {
   type TierId,
 } from "../../lib/types";
 import { useQuestStore } from "../../store/quest-store";
-import { Brand, PrimaryButton, Shell } from "./QuestUi";
+import { AccountControls, Brand, PrimaryButton, Shell } from "./QuestUi";
 
 const TIER_LABELS: Readonly<Record<TierId, string>> = {
   S: "All-time favorites",
@@ -35,6 +36,7 @@ const TIER_LABELS: Readonly<Record<TierId, string>> = {
   C: "Good enough",
   D: "Not for me",
   unranked: "Unranked",
+  trash: "Trash",
 };
 
 export const TierListStudio = observer(
@@ -48,6 +50,7 @@ export const TierListStudio = observer(
     const clearTierList = useQuestStore((store) => store.clearTierList);
     const setStage = useQuestStore((store) => store.setStage);
     const [query, setQuery] = useState("");
+    const [trashOpen, setTrashOpen] = useState(false);
     const [exportError, setExportError] = useState<string | null>(null);
     const tierFilters = useMemo(
       () => ({
@@ -73,8 +76,11 @@ export const TierListStudio = observer(
           .flatMap((item) => item.genres),
       ),
     ].sort();
-    const rankedCount =
-      eligible.length - showsInTier(eligible, assignments, "unranked").length;
+    const rankedCount = RANKED_TIERS.reduce(
+      (count, tier) => count + showsInTier(eligible, assignments, tier).length,
+      0,
+    );
+    const trashItems = showsInTier(eligible, assignments, "trash");
     const update = <Key extends keyof QuestFilters>(
       key: Key,
       value: QuestFilters[Key],
@@ -103,9 +109,12 @@ export const TierListStudio = observer(
       <Shell compact>
         <header className="topbar">
           <Brand />
-          <span className="step-label">
-            <Trophy size={15} /> Tier List Studio
-          </span>
+          <div className="topbar-actions">
+            <span className="step-label">
+              <Trophy size={15} /> Tier List Studio
+            </span>
+            <AccountControls />
+          </div>
         </header>
         <section className="tier-studio">
           <div className="tier-heading">
@@ -305,6 +314,13 @@ export const TierListStudio = observer(
               ) : null}
             </div>
           </section>
+          <TrashBin
+            items={trashItems}
+            open={trashOpen}
+            onToggle={() => setTrashOpen((open) => !open)}
+            onDrop={(event) => handleDrop(event, "trash")}
+            onAssign={assignTier}
+          />
           <div className="bottom-actions">
             <PrimaryButton variant="ghost" onClick={() => setStage("mode")}>
               <ArrowLeft size={18} /> Back to quests
@@ -318,6 +334,62 @@ export const TierListStudio = observer(
     );
   },
 );
+
+function TrashBin({
+  items,
+  open,
+  onToggle,
+  onDrop,
+  onAssign,
+}: {
+  readonly items: readonly MediaItem[];
+  readonly open: boolean;
+  readonly onToggle: () => void;
+  readonly onDrop: (event: React.DragEvent<HTMLElement>) => void;
+  readonly onAssign: (mediaId: string, tier: TierId) => void;
+}): React.ReactElement {
+  return (
+    // Every trash operation has an equivalent button on each card.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    <section
+      className={`tier-trash${open ? " open" : ""}`}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={onDrop}
+      aria-label="Removed shows drop area"
+      role="group"
+      tabIndex={-1}
+    >
+      <button
+        className="tier-trash-toggle"
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+      >
+        <Trash2 size={18} />
+        <span>
+          <strong>Removed shows</strong>
+          <small>Drop here · {items.length} in trash</small>
+        </span>
+        <span>{open ? "Close" : "Open"}</span>
+      </button>
+      {!open ? null : (
+        <div className="tier-trash-grid">
+          {items.map((item) => (
+            <ShowCard
+              key={item.id}
+              item={item}
+              tier="trash"
+              onAssign={onAssign}
+            />
+          ))}
+          {items.length === 0 ? (
+            <div className="empty-list">Trash is empty.</div>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
 
 function ShowCard({
   item,
@@ -334,7 +406,10 @@ function ShowCard({
     <article
       className="tier-show-card"
       draggable
-      onDragStart={(event) => event.dataTransfer.setData("text/plain", item.id)}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", item.id);
+      }}
       role="group"
       tabIndex={-1}
     >
@@ -343,7 +418,7 @@ function ShowCard({
         {item.posterUrl === null ? (
           <span>{item.title.slice(0, 1)}</span>
         ) : (
-          <img src={item.posterUrl} alt="" />
+          <img src={item.posterUrl} alt="" draggable={false} />
         )}
       </div>
       <div className="tier-show-copy">
@@ -365,6 +440,25 @@ function ShowCard({
           ))}
         </select>
       </label>
+      {tier === "trash" ? (
+        <button
+          className="tier-card-action restore"
+          type="button"
+          onClick={() => onAssign(item.id, "unranked")}
+          aria-label={`Restore ${item.title} to the unranked queue`}
+        >
+          Restore
+        </button>
+      ) : (
+        <button
+          className="tier-card-action remove"
+          type="button"
+          onClick={() => onAssign(item.id, "trash")}
+          aria-label={`Remove ${item.title} from this tier list`}
+        >
+          <Trash2 size={13} aria-hidden="true" />
+        </button>
+      )}
     </article>
   );
 }

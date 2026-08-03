@@ -52,7 +52,7 @@ export type QuestStage =
   | "complete"
   | "tier-list";
 
-export const TIER_IDS = ["S", "A", "B", "C", "D", "unranked"] as const;
+export const TIER_IDS = ["S", "A", "B", "C", "D", "unranked", "trash"] as const;
 export type TierId = (typeof TIER_IDS)[number];
 export type TierAssignments = Readonly<Record<string, TierId>>;
 
@@ -60,6 +60,10 @@ export interface PlexServer {
   readonly name: string;
   readonly uri: string;
   readonly accessToken: string;
+}
+
+export interface PlexAccount {
+  readonly displayName: string;
 }
 
 export interface PlexLibrary {

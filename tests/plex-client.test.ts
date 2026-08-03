@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearPendingPlexPin,
+  fetchPlexAccount,
   readPendingPlexPin,
   savePendingPlexPin,
 } from "../lib/plex-client";
+import { QuestStore } from "../store/quest-store";
 
 describe("resumable Plex authentication", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("restores a pending PIN after navigation without logging its value", () => {
@@ -37,5 +40,47 @@ describe("resumable Plex authentication", () => {
     clearPendingPlexPin();
 
     expect(readPendingPlexPin()).toBeNull();
+  });
+
+  it("loads the visible Plex username without exposing the token", async () => {
+    const request = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ username: "movie-fan", title: "Movie Fan" }),
+        {
+          status: 200,
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", request);
+
+    await expect(fetchPlexAccount("private-token")).resolves.toEqual({
+      displayName: "movie-fan",
+    });
+    expect(
+      window.sessionStorage.getItem("plex-rating-quest-diagnostics"),
+    ).not.toContain("private-token");
+  });
+
+  it("logs out and clears account-derived state", () => {
+    const store = new QuestStore();
+    store.setPlexData({
+      token: "private-token",
+      accountName: "movie-fan",
+      servers: [],
+      selectedServer: {
+        name: "Living Room",
+        uri: "https://server.example",
+        accessToken: "private-token",
+      },
+      libraries: [],
+      media: [],
+    });
+
+    store.logout();
+
+    expect(store.accessToken).toBeNull();
+    expect(store.selectedServer).toBeNull();
+    expect(store.userName).toBe("Explorer");
+    expect(store.stage).toBe("welcome");
   });
 });

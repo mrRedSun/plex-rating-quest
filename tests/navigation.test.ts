@@ -1,0 +1,24 @@
+import { describe, expect, it } from "vitest";
+import {
+  HISTORY_STAGE_KEY,
+  pathForStage,
+  stageFromHistoryState,
+} from "../lib/navigation";
+
+describe("browser navigation", () => {
+  it("uses stable website paths for app screens", () => {
+    expect(pathForStage("welcome")).toBe("/");
+    expect(pathForStage("tier-list")).toBe("/tier-list");
+    expect(pathForStage("review")).toBe("/review");
+  });
+
+  it("accepts only known app history entries", () => {
+    expect(stageFromHistoryState({ [HISTORY_STAGE_KEY]: "filters" })).toBe(
+      "filters",
+    );
+    expect(
+      stageFromHistoryState({ [HISTORY_STAGE_KEY]: "unknown" }),
+    ).toBeNull();
+    expect(stageFromHistoryState(null)).toBeNull();
+  });
+});

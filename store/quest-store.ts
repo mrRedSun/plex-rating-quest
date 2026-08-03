@@ -116,24 +116,25 @@ export class QuestStore {
     this.stage = "mode";
   }
 
-  setPlexData(
-    token: string,
-    servers: readonly PlexServer[],
-    selectedServer: PlexServer,
-    libraries: readonly PlexLibrary[],
-    media: readonly MediaItem[],
-  ): void {
+  setPlexData(connection: {
+    readonly token: string;
+    readonly accountName: string;
+    readonly servers: readonly PlexServer[];
+    readonly selectedServer: PlexServer;
+    readonly libraries: readonly PlexLibrary[];
+    readonly media: readonly MediaItem[];
+  }): void {
     logEvent("quest.plex.ready", {
-      serverCount: servers.length,
-      libraryCount: libraries.length,
-      mediaCount: media.length,
+      serverCount: connection.servers.length,
+      libraryCount: connection.libraries.length,
+      mediaCount: connection.media.length,
     });
-    this.accessToken = token;
-    this.servers = servers;
-    this.selectedServer = selectedServer;
-    this.libraries = libraries;
-    this.media = media;
-    this.userName = "Plex member";
+    this.accessToken = connection.token;
+    this.servers = connection.servers;
+    this.selectedServer = connection.selectedServer;
+    this.libraries = connection.libraries;
+    this.media = connection.media;
+    this.userName = connection.accountName;
     this.stage = "mode";
     this.isDemo = false;
   }
@@ -260,6 +261,11 @@ export class QuestStore {
     this.resetState();
   }
 
+  logout(): void {
+    logEvent("auth.logout");
+    this.resetState();
+  }
+
   private resetState(): void {
     runInAction(() => {
       this.stage = "welcome";
@@ -278,6 +284,7 @@ export class QuestStore {
       this.skips = 0;
       this.startedAt = null;
       this.isPaused = false;
+      this.tierAssignments = {};
     });
   }
 }

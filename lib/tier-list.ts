@@ -46,8 +46,8 @@ export function createTierListMarkdown(
     (tier) =>
       `## ${tier} Tier\n\n${markdownList(showsInTier(items, assignments, tier))}`,
   );
-  const rankedCount = items.filter(
-    (item) => (assignments[item.id] ?? "unranked") !== "unranked",
+  const rankedCount = items.filter((item) =>
+    RANKED_TIERS.some((tier) => assignments[item.id] === tier),
   ).length;
   return [
     "# My Plex Show Tier List",

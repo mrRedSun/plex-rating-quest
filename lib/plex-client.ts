@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { logError, logEvent } from "./diagnostics";
-import type { MediaItem, PlexLibrary, PlexServer } from "./types";
+import type { MediaItem, PlexAccount, PlexLibrary, PlexServer } from "./types";
 
 const PRODUCT = "Plex Rating Quest";
 const PIN_ENDPOINT = "https://plex.tv/api/v2/pins";
 const RESOURCE_ENDPOINT = "https://plex.tv/api/v2/resources";
+const USER_ENDPOINT = "https://plex.tv/api/v2/user";
 const PENDING_PIN_KEY = "plex-rating-quest-pending-pin";
 const PIN_MAX_AGE_MS = 10 * 60 * 1000;
 
@@ -27,6 +28,10 @@ const resourceSchema = z.array(
     ),
   }),
 );
+const userSchema = z.object({
+  username: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+});
 const librarySchema = z.object({
   MediaContainer: z.object({
     Directory: z
@@ -228,6 +233,24 @@ export async function fetchPlexServers(token: string): Promise<PlexServer[]> {
   });
   logEvent("plex.discovery.completed", { serverCount: servers.length });
   return servers;
+}
+
+export async function fetchPlexAccount(token: string): Promise<PlexAccount> {
+  logEvent("plex.account.started");
+  const response = await checkedFetch("account.fetch", USER_ENDPOINT, {
+    headers: headers(token),
+  });
+  const account = userSchema.parse(await response.json());
+  const username = account.username?.trim();
+  const title = account.title?.trim();
+  const displayName =
+    username !== undefined && username.length > 0
+      ? username
+      : title !== undefined && title.length > 0
+        ? title
+        : "Plex member";
+  logEvent("plex.account.completed");
+  return { displayName };
 }
 
 export async function fetchPlexLibraries(

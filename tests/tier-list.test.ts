@@ -38,4 +38,21 @@ describe("tier-list rules", () => {
     expect(markdown).toContain("## Recommendation prompt");
     expect(markdown).not.toContain("token");
   });
+
+  it("keeps trashed shows out of ranked exports while allowing restoration", () => {
+    const shows = filterTierShows(DEMO_MEDIA, DEFAULT_FILTERS);
+    const removed = shows[0];
+    expect(removed).toBeDefined();
+    if (removed === undefined)
+      throw new Error("Demo fixtures must contain a show");
+    const assignments = { [removed.id]: "trash" as const };
+
+    expect(showsInTier(shows, assignments, "trash")).toEqual([removed]);
+    expect(createTierListMarkdown(shows, assignments)).not.toContain(
+      `- ${removed.title} (${removed.year})`,
+    );
+    expect(
+      showsInTier(shows, { [removed.id]: "unranked" }, "unranked"),
+    ).toContain(removed);
+  });
 });

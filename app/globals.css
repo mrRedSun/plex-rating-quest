@@ -103,6 +103,55 @@ select:focus-visible {
   position: relative;
   z-index: 20;
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+.account-controls {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 6px 7px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(12, 10, 14, 0.72);
+}
+.account-controls > span {
+  display: grid;
+  min-width: 0;
+  line-height: 1.1;
+}
+.account-controls strong,
+.account-controls small {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-controls strong {
+  font-size: 11px;
+}
+.account-controls small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.account-controls button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 107, 107, 0.1);
+  color: #ff9a9a;
+  font-size: 10px;
+  cursor: pointer;
+}
 .brand {
   display: flex;
   align-items: center;
@@ -230,10 +279,6 @@ select:focus-visible {
   }
 }
 .diagnostics-button {
-  position: fixed;
-  right: 18px;
-  bottom: 16px;
-  z-index: 90;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -246,6 +291,16 @@ select:focus-visible {
   letter-spacing: 0.04em;
   cursor: pointer;
   backdrop-filter: blur(12px);
+}
+.shell-utilities {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: min(1460px, 100%);
+  margin: 0 auto;
+  padding: 16px 0 20px;
 }
 .diagnostics-button:hover {
   color: var(--cream);
@@ -1376,6 +1431,17 @@ select:focus-visible {
   transition-duration: 0.001ms !important;
 }
 @media (max-width: 900px) {
+  .topbar-actions {
+    gap: 8px;
+  }
+  .account-controls button span,
+  .topbar-actions .step-label {
+    display: none;
+  }
+  .account-controls strong,
+  .account-controls small {
+    max-width: 96px;
+  }
   .welcome-grid {
     grid-template-columns: 1fr;
     padding-top: 7vh;
@@ -1773,6 +1839,8 @@ select:focus-visible {
   background: #17131c;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .tier-show-card:active {
   cursor: grabbing;
@@ -1794,6 +1862,8 @@ select:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 .tier-show-copy {
   min-width: 0;
@@ -1829,9 +1899,79 @@ select:focus-visible {
   color: var(--amber-light);
   font-size: 10px;
 }
+.tier-card-action {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  min-height: 23px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(10, 8, 12, 0.88);
+  color: var(--muted);
+  font-size: 8px;
+  cursor: pointer;
+}
+.tier-card-action.remove:hover {
+  color: #ff9696;
+  border-color: rgba(255, 107, 107, 0.35);
+}
+.tier-card-action.restore {
+  color: var(--amber-light);
+}
 .unranked-tray {
   margin-top: 18px;
   padding: 20px;
+}
+.tier-trash {
+  margin-top: 14px;
+  border: 1px dashed rgba(255, 107, 107, 0.28);
+  border-radius: 16px;
+  background: rgba(255, 107, 107, 0.035);
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.tier-trash:hover,
+.tier-trash.open {
+  border-color: rgba(255, 107, 107, 0.5);
+  background: rgba(255, 107, 107, 0.06);
+}
+.tier-trash-toggle {
+  width: 100%;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 18px;
+  border: 0;
+  background: transparent;
+  color: #ff9696;
+  text-align: left;
+  cursor: pointer;
+}
+.tier-trash-toggle > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+}
+.tier-trash-toggle strong {
+  color: var(--cream);
+  font-size: 12px;
+}
+.tier-trash-toggle small,
+.tier-trash-toggle > span:last-child {
+  color: var(--muted);
+  font-size: 9px;
+}
+.tier-trash-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 18px 18px;
 }
 .unranked-heading {
   display: flex;
