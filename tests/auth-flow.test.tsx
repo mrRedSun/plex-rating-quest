@@ -1,0 +1,155 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PlexRatingQuest } from "../app/components/PlexRatingQuest";
+import * as plexClient from "../lib/plex-client";
+import type { MediaItem, PlexServer } from "../lib/types";
+import { questStore } from "../store/quest-store";
+
+vi.mock("../lib/plex-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof plexClient>()),
+  fetchPlexLibraries: vi.fn(),
+  fetchPlexMedia: vi.fn(),
+  fetchPlexServers: vi.fn(),
+}));
+
+const SERVER: PlexServer = {
+  name: "Living Room",
+  uri: "https://server.example",
+  accessToken: "server-token",
+};
+
+const RATED_SHOW: MediaItem = {
+  id: "show-1",
+  title: "Excellent Show",
+  year: 2020,
+  kind: "show",
+  runtimeMinutes: 45,
+  genres: ["Drama"],
+  watchCount: 4,
+  watchedAt: "2026-01-01T00:00:00Z",
+  posterUrl: null,
+  backdropUrl: null,
+  audienceRating: null,
+  criticRating: null,
+  userRating: 9,
+  libraryId: "shows",
+};
+
+function authorize(): void {
+  questStore.setPlexAuth({
+    token: "account-token",
+    accountId: "account-id",
+    accountName: "movie-fan",
+  });
+}
+
+describe("durable separated Plex flows", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    questStore.logout();
+    vi.clearAllMocks();
+    window.history.replaceState({}, "", "/");
+  });
+
+  afterEach(() => {
+    cleanup();
+    questStore.logout();
+  });
+
+  it("keeps authorization when a separate data pull fails", async () => {
+    authorize();
+    vi.mocked(plexClient.fetchPlexServers).mockRejectedValue(
+      new Error("Server temporarily unavailable"),
+    );
+
+    render(<PlexRatingQuest />);
+    fireEvent.click(screen.getByRole("button", { name: /load my plex data/i }));
+
+    expect(
+      await screen.findByText("Server temporarily unavailable"),
+    ).toBeInTheDocument();
+    expect(questStore.accessToken).toBe("account-token");
+    expect(questStore.accountId).toBe("account-id");
+    expect(
+      screen.getByRole("button", { name: /load my plex data/i }),
+    ).toBeEnabled();
+  });
+
+  it("loads data from an already-authorized session without another PIN", async () => {
+    authorize();
+    vi.mocked(plexClient.fetchPlexServers).mockResolvedValue([SERVER]);
+    vi.mocked(plexClient.fetchPlexLibraries).mockResolvedValue([
+      { id: "shows", title: "Shows", type: "show" },
+    ]);
+    vi.mocked(plexClient.fetchPlexMedia).mockResolvedValue([RATED_SHOW]);
+
+    render(<PlexRatingQuest />);
+    fireEvent.click(screen.getByRole("button", { name: /load my plex data/i }));
+
+    expect(await screen.findByText("Choose your quest")).toBeInTheDocument();
+    expect(plexClient.fetchPlexMedia).toHaveBeenCalledWith(
+      SERVER,
+      [{ id: "shows", title: "Shows", type: "show" }],
+      { id: "account-id", token: "account-token" },
+    );
+    expect(questStore.stage).toBe("mode");
+  });
+
+  it("offers accessible logout and clears the durable authorization", () => {
+    authorize();
+    render(<PlexRatingQuest />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Log out movie-fan" }));
+
+    expect(questStore.accessToken).toBeNull();
+    expect(questStore.accountId).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /continue with plex/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("copies only rated shows as an AI recommendation prompt", async () => {
+    const writeText = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    authorize();
+    questStore.setPlexData({
+      servers: [SERVER],
+      selectedServer: SERVER,
+      libraries: [],
+      media: [
+        RATED_SHOW,
+        { ...RATED_SHOW, id: "movie-1", title: "Rated Movie", kind: "movie" },
+        {
+          ...RATED_SHOW,
+          id: "show-2",
+          title: "Unrated Show",
+          userRating: null,
+        },
+      ],
+    });
+    questStore.setStage("dashboard");
+
+    render(<PlexRatingQuest />);
+    fireEvent.click(screen.getByRole("button", { name: /copy shows for ai/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    const prompt = vi.mocked(writeText).mock.calls[0]?.[0];
+    expect(prompt).toContain("Excellent Show (2020): 4.5/5");
+    expect(prompt).not.toContain("Rated Movie");
+    expect(prompt).not.toContain("Unrated Show");
+    expect(await screen.findByText("Copied")).toBeInTheDocument();
+  });
+});
