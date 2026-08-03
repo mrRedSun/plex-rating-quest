@@ -50,6 +50,7 @@ export type QuestStage =
   | "review"
   | "applying"
   | "complete"
+  | "dashboard"
   | "tier-list";
 
 export const TIER_IDS = ["S", "A", "B", "C", "D", "unranked", "trash"] as const;

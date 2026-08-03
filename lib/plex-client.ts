@@ -118,6 +118,25 @@ const historyResponseSchema = z.object({
   }),
   errors: z.array(z.object({ message: z.string() })).optional(),
 });
+const ratingsResponseSchema = z.object({
+  data: z.object({
+    user: z.object({
+      ratingsV2: z.object({
+        nodes: z.array(
+          z.object({
+            rating: z.number(),
+            metadataItem: historyMetadataSchema,
+          }),
+        ),
+        pageInfo: z.object({
+          hasNextPage: z.boolean(),
+          endCursor: z.string().nullable().optional(),
+        }),
+      }),
+    }),
+  }),
+  errors: z.array(z.object({ message: z.string() })).optional(),
+});
 
 const WATCH_HISTORY_QUERY = `
   query GetWatchHistoryHub($uuid: ID!, $first: PaginationInt!, $after: String) {
@@ -126,6 +145,23 @@ const WATCH_HISTORY_QUERY = `
         nodes {
           id
           date
+          metadataItem {
+            id key title type year publishedAt originallyAvailableAt
+            images { coverArt coverPoster thumbnail art }
+            grandparent { key title publishedAt images { coverArt coverPoster thumbnail art } }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+`;
+const RATINGS_QUERY = `
+  query GetRatingsHub($uuid: ID!, $first: PaginationInt!, $after: String) {
+    user(id: $uuid) {
+      ratingsV2(first: $first, after: $after) {
+        nodes {
+          rating
           metadataItem {
             id key title type year publishedAt originallyAvailableAt
             images { coverArt coverPoster thumbnail art }
@@ -394,6 +430,28 @@ async function fetchHistoryPage(
   return historyResponseSchema.parse(await response.json());
 }
 
+async function fetchRatingsPage(
+  token: string,
+  accountId: string,
+  after: string | null,
+): Promise<z.infer<typeof ratingsResponseSchema>> {
+  const requestHeaders = new Headers(headers(token));
+  requestHeaders.set("Content-Type", "application/json");
+  const response = await checkedFetch(
+    "ratings.page.fetch",
+    COMMUNITY_ENDPOINT,
+    {
+      method: "POST",
+      headers: requestHeaders,
+      body: JSON.stringify({
+        query: RATINGS_QUERY,
+        variables: { uuid: accountId, first: 100, after },
+      }),
+    },
+  );
+  return ratingsResponseSchema.parse(await response.json());
+}
+
 function groupHistoryNodes(nodes: readonly HistoryNode[]): MediaItem[] {
   const grouped = new Map<string, MediaItem>();
   for (const node of nodes) {
@@ -454,6 +512,50 @@ async function fetchPlexWatchHistory(
     titleCount: grouped.length,
   });
   return grouped;
+}
+
+interface AccountRating {
+  readonly id: string;
+  readonly title: string;
+  readonly year: number;
+  readonly kind: "movie" | "show";
+  readonly rating: number;
+}
+
+async function fetchPlexRatings(
+  token: string,
+  accountId: string,
+): Promise<AccountRating[]> {
+  logEvent("plex.ratings.started");
+  const ratings: AccountRating[] = [];
+  let after: string | null = null;
+  let pageCount = 0;
+  do {
+    pageCount += 1;
+    const parsed = await fetchRatingsPage(token, accountId, after);
+    const error = parsed.errors?.[0];
+    if (error !== undefined)
+      throw new Error(`Plex ratings failed: ${error.message}`);
+    const connection = parsed.data.user.ratingsV2;
+    for (const node of connection.nodes) {
+      const identity = historyIdentity({
+        id: "rating",
+        date: "",
+        metadataItem: node.metadataItem,
+      });
+      if (identity !== null) ratings.push({ ...identity, rating: node.rating });
+    }
+    after = connection.pageInfo.hasNextPage
+      ? (connection.pageInfo.endCursor ?? null)
+      : null;
+    if (connection.pageInfo.hasNextPage && after === null)
+      throw new Error("Plex ratings pagination returned no cursor");
+  } while (after !== null);
+  logEvent("plex.ratings.completed", {
+    pageCount,
+    ratingCount: ratings.length,
+  });
+  return ratings;
 }
 
 export async function fetchPlexLibraries(
@@ -521,7 +623,10 @@ export async function fetchPlexMedia(
     logEvent("plex.media.completed", { mediaCount: libraryMedia.length });
     return libraryMedia;
   }
-  const historyMedia = await fetchPlexWatchHistory(account.token, account.id);
+  const [historyMedia, accountRatings] = await Promise.all([
+    fetchPlexWatchHistory(account.token, account.id),
+    fetchPlexRatings(account.token, account.id),
+  ]);
   const normalize = (value: string): string =>
     value.toLocaleLowerCase().replaceAll(/[^a-z0-9]/g, "");
   const historyByTitle = new Map(
@@ -548,8 +653,23 @@ export async function fetchPlexMedia(
     ...mergedLibraryMedia,
     ...historyMedia.filter((item) => !matchedHistoryIds.has(item.id)),
   ];
-  logEvent("plex.media.completed", { mediaCount: media.length });
-  return media;
+  const ratingsByTitle = new Map(
+    accountRatings.map((rating) => [
+      `${rating.kind}:${normalize(rating.title)}:${rating.year}`,
+      rating.rating,
+    ]),
+  );
+  const ratedMedia = media.map((item) => ({
+    ...item,
+    userRating:
+      ratingsByTitle.get(
+        `${item.kind}:${normalize(item.title)}:${item.year}`,
+      ) ??
+      ratingsByTitle.get(`${item.kind}:${normalize(item.title)}:0`) ??
+      item.userRating,
+  }));
+  logEvent("plex.media.completed", { mediaCount: ratedMedia.length });
+  return ratedMedia;
 }
 
 export async function applyPlexRating(

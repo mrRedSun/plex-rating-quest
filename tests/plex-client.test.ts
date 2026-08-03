@@ -68,55 +68,78 @@ describe("resumable Plex authentication", () => {
   });
 
   it("loads account-wide history and aggregates episodes into shows", async () => {
-    const request = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            user: {
-              watchHistory: {
-                nodes: [
-                  {
-                    id: "event-1",
-                    date: "2025-01-01T00:00:00Z",
-                    metadataItem: {
-                      id: "episode-1",
-                      key: "/library/metadata/episode-1",
-                      title: "Pilot",
-                      type: "EPISODE",
-                      grandparent: {
+    const request = vi.fn().mockImplementation((_input, init?: RequestInit) => {
+      const body = typeof init?.body === "string" ? init.body : "";
+      const payload = body.includes("GetRatingsHub")
+        ? {
+            data: {
+              user: {
+                ratingsV2: {
+                  nodes: [
+                    {
+                      rating: 9,
+                      metadataItem: {
+                        id: "show-1",
                         key: "/library/metadata/show-1",
                         title: "Old Favorite",
-                        publishedAt: "2012-01-01",
-                        images: {
-                          coverPoster: "https://images.example/poster.jpg",
+                        type: "SHOW",
+                        year: 2012,
+                      },
+                    },
+                  ],
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                },
+              },
+            },
+          }
+        : {
+            data: {
+              user: {
+                watchHistory: {
+                  nodes: [
+                    {
+                      id: "event-1",
+                      date: "2025-01-01T00:00:00Z",
+                      metadataItem: {
+                        id: "episode-1",
+                        key: "/library/metadata/episode-1",
+                        title: "Pilot",
+                        type: "EPISODE",
+                        grandparent: {
+                          key: "/library/metadata/show-1",
+                          title: "Old Favorite",
+                          publishedAt: "2012-01-01",
+                          images: {
+                            coverPoster: "https://images.example/poster.jpg",
+                          },
                         },
                       },
                     },
-                  },
-                  {
-                    id: "event-2",
-                    date: "2026-01-01T00:00:00Z",
-                    metadataItem: {
-                      id: "episode-2",
-                      key: "/library/metadata/episode-2",
-                      title: "Finale",
-                      type: "EPISODE",
-                      grandparent: {
-                        key: "/library/metadata/show-1",
-                        title: "Old Favorite",
-                        publishedAt: "2012-01-01",
+                    {
+                      id: "event-2",
+                      date: "2026-01-01T00:00:00Z",
+                      metadataItem: {
+                        id: "episode-2",
+                        key: "/library/metadata/episode-2",
+                        title: "Finale",
+                        type: "EPISODE",
+                        grandparent: {
+                          key: "/library/metadata/show-1",
+                          title: "Old Favorite",
+                          publishedAt: "2012-01-01",
+                        },
                       },
                     },
-                  },
-                ],
-                pageInfo: { hasNextPage: false, endCursor: null },
+                  ],
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                },
               },
             },
-          },
-        }),
-        { status: 200 },
-      ),
-    );
+          };
+      return Promise.resolve(
+        new Response(JSON.stringify(payload), { status: 200 }),
+      );
+    });
     vi.stubGlobal("fetch", request);
 
     const media = await fetchPlexMedia(
@@ -137,6 +160,7 @@ describe("resumable Plex authentication", () => {
         year: 2012,
         watchCount: 2,
         watchedAt: "2026-01-01T00:00:00Z",
+        userRating: 9,
       }),
     ]);
     expect(request).toHaveBeenCalledWith(

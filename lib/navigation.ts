@@ -8,6 +8,7 @@ const STAGE_PATHS: Readonly<Record<QuestStage, string>> = {
   review: "/review",
   applying: "/applying",
   complete: "/complete",
+  dashboard: "/ratings",
   "tier-list": "/tier-list",
 };
 
