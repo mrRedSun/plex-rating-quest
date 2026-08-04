@@ -4,16 +4,27 @@ import { useState } from "react";
 import { downloadDiagnosticReport } from "../../lib/diagnostics";
 import { useQuestStore } from "../../store/quest-store";
 
-export function Brand(): React.ReactElement {
+export const Brand = observer(function Brand(): React.ReactElement {
+  const hasLoadedData = useQuestStore((state) => state.media.length > 0);
+  const setStage = useQuestStore((state) => state.setStage);
+  const destination = hasLoadedData ? "/quests" : "/";
   return (
-    <div className="brand">
+    <a
+      className="brand"
+      href={destination}
+      onClick={(event) => {
+        event.preventDefault();
+        setStage(hasLoadedData ? "mode" : "welcome");
+      }}
+      aria-label="Plex Rating Quest home"
+    >
       <span className="brand-mark">
         <Star aria-hidden="true" size={15} fill="currentColor" />
       </span>
       <span>Plex Rating Quest</span>
-    </div>
+    </a>
   );
-}
+});
 
 export function PrimaryButton({
   children,
