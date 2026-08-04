@@ -152,4 +152,41 @@ describe("durable separated Plex flows", () => {
     expect(prompt).not.toContain("Unrated Show");
     expect(await screen.findByText("Copied")).toBeInTheDocument();
   });
+
+  it("uses the brand as a home link to the loaded app selection", () => {
+    authorize();
+    questStore.setPlexData({
+      servers: [SERVER],
+      selectedServer: SERVER,
+      libraries: [],
+      media: [RATED_SHOW],
+    });
+    questStore.setStage("dashboard");
+    render(<PlexRatingQuest />);
+
+    const home = screen.getByRole("link", {
+      name: "Plex Rating Quest home",
+    });
+    expect(home).toHaveAttribute("href", "/quests");
+    fireEvent.click(home);
+
+    expect(questStore.stage).toBe("mode");
+    expect(screen.getByText("Choose your quest")).toBeInTheDocument();
+  });
+
+  it("uses the brand as a home link to login before data is loaded", () => {
+    authorize();
+    render(<PlexRatingQuest />);
+
+    const home = screen.getByRole("link", {
+      name: "Plex Rating Quest home",
+    });
+    expect(home).toHaveAttribute("href", "/");
+    fireEvent.click(home);
+
+    expect(questStore.stage).toBe("welcome");
+    expect(
+      screen.getByRole("button", { name: /load my plex data/i }),
+    ).toBeInTheDocument();
+  });
 });

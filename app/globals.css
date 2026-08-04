@@ -156,8 +156,10 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 11px;
+  color: inherit;
   font-weight: 700;
   letter-spacing: -0.02em;
+  text-decoration: none;
 }
 .brand-mark {
   width: 31px;
