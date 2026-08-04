@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEMO_MEDIA } from "../lib/demo-data";
 import { DEFAULT_FILTERS } from "../lib/quest";
+import { setLocale } from "../lib/localization";
 import {
   createTierListMarkdown,
   filterTierShows,
@@ -54,5 +55,21 @@ describe("tier-list rules", () => {
     expect(
       showsInTier(shows, { [removed.id]: "unranked" }, "unranked"),
     ).toContain(removed);
+  });
+
+  it("exports an AI-ready Ukrainian tier list when Ukrainian is selected", () => {
+    const shows = filterTierShows(DEMO_MEDIA, DEFAULT_FILTERS);
+    const first = shows[0];
+    expect(first).toBeDefined();
+    if (first === undefined)
+      throw new Error("Demo fixtures must contain a watched show");
+    setLocale("uk");
+
+    const markdown = createTierListMarkdown(shows, { [first.id]: "S" });
+    setLocale("en");
+
+    expect(markdown).toContain("# Мій тірліст серіалів Plex");
+    expect(markdown).toContain("## Запит для рекомендацій");
+    expect(markdown).toContain(`- ${first.title} (${first.year})`);
   });
 });

@@ -42,6 +42,7 @@ import {
   waitForPlexToken,
 } from "../../lib/plex-client";
 import { logError, logEvent } from "../../lib/diagnostics";
+import { getLocale, translate } from "../../lib/localization";
 import {
   HISTORY_STAGE_KEY,
   pathForStage,
@@ -65,6 +66,7 @@ import {
   AccountControls,
   Brand,
   DiagnosticsButton,
+  LanguageControl,
   PrimaryButton,
   Shell,
   StarPicker,
@@ -106,7 +108,7 @@ const MODE_OPTIONS: readonly {
 
 function formatDate(value: string): string {
   if (value === "Never") return value;
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat(getLocale() === "uk" ? "uk-UA" : "en", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -528,9 +530,11 @@ const RatingsDashboard = observer(
           `- ${item.title}${item.year > 0 ? ` (${item.year})` : ""}: ${((item.userRating ?? 0) / 2).toFixed(1)}/5`,
       );
       const prompt = [
-        "Recommend shows based on my Plex ratings. Avoid recommending titles already listed unless explaining a close comparison.",
+        translate(
+          "Recommend shows based on my Plex ratings. Avoid recommending titles already listed unless explaining a close comparison.",
+        ),
         "",
-        "My rated shows:",
+        translate("My rated shows:"),
         ...lines,
       ].join("\n");
       try {
@@ -962,6 +966,7 @@ const RatingGame = observer(function RatingGame(): React.ReactElement {
         </div>
         <div className="topbar-actions">
           <AccountControls />
+          <LanguageControl />
           <button
             className="icon-button"
             aria-label="Pause quest"

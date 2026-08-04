@@ -1,4 +1,5 @@
 import { logEvent } from "./diagnostics";
+import { getLocale } from "./localization";
 import { createTierListMarkdown, RANKED_TIERS, showsInTier } from "./tier-list";
 import type { MediaItem, TierAssignments } from "./types";
 
@@ -56,6 +57,7 @@ export async function downloadTierListImage(
   items: readonly MediaItem[],
   assignments: TierAssignments,
 ): Promise<void> {
+  const ukrainian = getLocale() === "uk";
   const canvas = document.createElement("canvas");
   canvas.width = 1600;
   const measuringContext = canvas.getContext("2d");
@@ -93,11 +95,17 @@ export async function downloadTierListImage(
   context.fillText("PLEX RATING QUEST", 90, 90);
   context.fillStyle = "#f6f0df";
   context.font = "700 64px system-ui, sans-serif";
-  context.fillText("My Show Tier List", 90, 165);
+  context.fillText(
+    ukrainian ? "Мій тірліст серіалів" : "My Show Tier List",
+    90,
+    165,
+  );
   context.fillStyle = "#aaa3ad";
   context.font = "24px system-ui, sans-serif";
   context.fillText(
-    `${items.length} watched shows · built locally in your browser`,
+    ukrainian
+      ? `${items.length} переглянутих серіалів · створено локально у браузері`
+      : `${items.length} watched shows · built locally in your browser`,
     92,
     212,
   );
@@ -124,7 +132,9 @@ export async function downloadTierListImage(
   context.fillStyle = "#827b84";
   context.font = "20px system-ui, sans-serif";
   context.fillText(
-    "Export contains titles only — no Plex credentials, tokens, or server details.",
+    ukrainian
+      ? "Експорт містить лише назви — без облікових даних, токенів чи інформації про сервер Plex."
+      : "Export contains titles only — no Plex credentials, tokens, or server details.",
     90,
     canvas.height - 38,
   );

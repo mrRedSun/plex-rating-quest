@@ -152,6 +152,28 @@ select:focus-visible {
   font-size: 10px;
   cursor: pointer;
 }
+.language-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(12, 10, 14, 0.72);
+  color: var(--muted);
+}
+.language-control select {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--cream);
+  font: inherit;
+  cursor: pointer;
+}
+.language-control option {
+  background: #17131a;
+}
 .brand {
   display: flex;
   align-items: center;
