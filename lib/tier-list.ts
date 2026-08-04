@@ -1,4 +1,5 @@
 import { filterMedia } from "./quest";
+import { getLocale } from "./localization";
 import type { MediaItem, QuestFilters, TierAssignments, TierId } from "./types";
 
 export const RANKED_TIERS = [
@@ -28,12 +29,15 @@ export function showsInTier(
 }
 
 function markdownList(items: readonly MediaItem[]): string {
+  const ukrainian = getLocale() === "uk";
   return items.length === 0
-    ? "- _None_"
+    ? ukrainian
+      ? "- _Немає_"
+      : "- _None_"
     : items
         .map(
           (item) =>
-            `- ${item.title} (${item.year}) — ${item.genres.join(", ") || "Unknown genre"}`,
+            `- ${item.title} (${item.year}) — ${item.genres.join(", ") || (ukrainian ? "Невідомий жанр" : "Unknown genre")}`,
         )
         .join("\n");
 }
@@ -42,21 +46,26 @@ export function createTierListMarkdown(
   items: readonly MediaItem[],
   assignments: TierAssignments,
 ): string {
+  const ukrainian = getLocale() === "uk";
   const sections = RANKED_TIERS.map(
     (tier) =>
-      `## ${tier} Tier\n\n${markdownList(showsInTier(items, assignments, tier))}`,
+      `## ${tier} ${ukrainian ? "рівень" : "Tier"}\n\n${markdownList(showsInTier(items, assignments, tier))}`,
   );
   const rankedCount = items.filter((item) =>
     RANKED_TIERS.some((tier) => assignments[item.id] === tier),
   ).length;
   return [
-    "# My Plex Show Tier List",
+    ukrainian ? "# Мій тірліст серіалів Plex" : "# My Plex Show Tier List",
     "",
-    `Ranked ${rankedCount} of ${items.length} watched shows.`,
+    ukrainian
+      ? `Розташовано ${rankedCount} із ${items.length} переглянутих серіалів.`
+      : `Ranked ${rankedCount} of ${items.length} watched shows.`,
     "",
     ...sections.flatMap((section) => [section, ""]),
-    "## Recommendation prompt",
+    ukrainian ? "## Запит для рекомендацій" : "## Recommendation prompt",
     "",
-    "Based on this tier list, recommend shows I am likely to enjoy. Explain how each recommendation connects to my S/A tiers, avoid titles already listed, and include a few thoughtful wildcards.",
+    ukrainian
+      ? "На основі цього тірліста порекомендуй серіали, які мені, ймовірно, сподобаються. Поясни зв’язок кожної рекомендації з моїми рівнями S/A, не пропонуй уже перелічені тайтли та додай кілька продуманих неочевидних варіантів."
+      : "Based on this tier list, recommend shows I am likely to enjoy. Explain how each recommendation connects to my S/A tiers, avoid titles already listed, and include a few thoughtful wildcards.",
   ].join("\n");
 }

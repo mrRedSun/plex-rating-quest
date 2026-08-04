@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import { PlexRatingQuest } from "../app/components/PlexRatingQuest";
+import { LocalizationRuntime } from "../app/components/Localization";
 import "../app/globals.css";
 import { logError, logEvent } from "../lib/diagnostics";
 import { questStore } from "../store/quest-store";
@@ -25,6 +26,7 @@ logEvent("application.started", { build: import.meta.env.MODE });
 questStore.startPersistence();
 createRoot(rootElement).render(
   <StrictMode>
+    <LocalizationRuntime />
     <PlexRatingQuest />
   </StrictMode>,
 );

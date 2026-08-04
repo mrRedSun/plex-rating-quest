@@ -13,6 +13,7 @@ Turn a large Plex library into a fast rating game. Connect through Plex, filter 
 - Privacy-safe PNG and AI-ready Markdown tier-list exports
 - Privacy-safe downloadable diagnostics
 - Responsive interface with reduced-motion support
+- Persisted English and Ukrainian interface localization
 - Self-hosted, pull-only Docker Compose deployment
 
 The app is browser-only. The container serves static files and never receives or stores Plex credentials.

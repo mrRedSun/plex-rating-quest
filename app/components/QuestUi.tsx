@@ -3,6 +3,9 @@ import { observer } from "mobx-react-lite";
 import { useState } from "react";
 import { downloadDiagnosticReport } from "../../lib/diagnostics";
 import { useQuestStore } from "../../store/quest-store";
+import { LanguageControl } from "./Localization";
+
+export { LanguageControl };
 
 export const Brand = observer(function Brand(): React.ReactElement {
   const hasLoadedData = useQuestStore((state) => state.media.length > 0);
@@ -108,6 +111,7 @@ export function Shell({
       {children}
       <footer className="shell-utilities">
         <AccountControls />
+        <LanguageControl />
         <DiagnosticsButton />
       </footer>
     </main>
