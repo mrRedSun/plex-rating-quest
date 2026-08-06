@@ -103,7 +103,7 @@ export function createDiagnosticReport(): string {
     {
       generatedAt: new Date().toISOString(),
       application: "Plex Rating Quest",
-      version: "1.0.0",
+      version: packageMetadata.version,
       environment: {
         online: typeof navigator === "undefined" ? null : navigator.onLine,
         language: typeof navigator === "undefined" ? null : navigator.language,
@@ -140,3 +140,4 @@ export function clearDiagnostics(): void {
   if (typeof window !== "undefined")
     window.sessionStorage.removeItem(STORAGE_KEY);
 }
+import packageMetadata from "../package.json";

@@ -156,6 +156,33 @@ export class QuestStore {
     this.isDemo = false;
   }
 
+  refreshPlexContent(content: {
+    readonly libraries: readonly PlexLibrary[];
+    readonly media: readonly MediaItem[];
+  }): void {
+    const refreshedById = new Map(content.media.map((item) => [item.id, item]));
+    const mergeArtwork = (item: MediaItem): MediaItem => {
+      const refreshed = refreshedById.get(item.id);
+      return refreshed === undefined
+        ? item
+        : {
+            ...item,
+            posterUrl: refreshed.posterUrl,
+            backdropUrl: refreshed.backdropUrl,
+            watchCount: refreshed.watchCount,
+            watchedAt: refreshed.watchedAt,
+            userRating: refreshed.userRating,
+          };
+    };
+    this.libraries = content.libraries;
+    this.media = content.media;
+    this.session = this.session.map(mergeArtwork);
+    logEvent("plex.content.refreshed", {
+      mediaCount: content.media.length,
+      sessionCount: this.session.length,
+    });
+  }
+
   setMode(mode: QuestMode): void {
     logEvent("quest.mode.selected", { mode });
     this.mode = mode;
