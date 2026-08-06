@@ -189,4 +189,42 @@ describe("durable separated Plex flows", () => {
       screen.getByRole("button", { name: /load my plex data/i }),
     ).toBeInTheDocument();
   });
+
+  it("rehydrates stripped artwork after restoring a persisted rating session", async () => {
+    authorize();
+    const stripped = { ...RATED_SHOW, posterUrl: null, backdropUrl: null };
+    const refreshed = {
+      ...RATED_SHOW,
+      posterUrl: "https://images.example/poster.jpg",
+      backdropUrl: "https://images.example/backdrop.jpg",
+    };
+    questStore.setPlexData({
+      servers: [SERVER],
+      selectedServer: SERVER,
+      libraries: [{ id: "shows", title: "Shows", type: "show" }],
+      media: [stripped],
+    });
+    questStore.createSession();
+    vi.mocked(plexClient.fetchPlexLibraries).mockResolvedValue([
+      { id: "shows", title: "Shows", type: "show" },
+    ]);
+    vi.mocked(plexClient.fetchPlexMedia).mockResolvedValue([refreshed]);
+
+    render(<PlexRatingQuest />);
+
+    await waitFor(() =>
+      expect(questStore.session[0]?.posterUrl).toBe(
+        "https://images.example/poster.jpg",
+      ),
+    );
+    expect(questStore.media[0]?.backdropUrl).toBe(
+      "https://images.example/backdrop.jpg",
+    );
+    expect(questStore.stage).toBe("rating");
+    expect(plexClient.fetchPlexMedia).toHaveBeenCalledWith(
+      SERVER,
+      [{ id: "shows", title: "Shows", type: "show" }],
+      { id: "account-id", token: "account-token" },
+    );
+  });
 });

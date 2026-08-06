@@ -1,4 +1,5 @@
 import { z } from "zod";
+import packageMetadata from "../package.json";
 import { logError, logEvent } from "./diagnostics";
 import type { MediaItem, PlexAccount, PlexLibrary, PlexServer } from "./types";
 
@@ -229,7 +230,7 @@ function headers(token?: string): HeadersInit {
     Accept: "application/json",
     "X-Plex-Client-Identifier": getClientId(),
     "X-Plex-Product": PRODUCT,
-    "X-Plex-Version": "1.0.0",
+    "X-Plex-Version": packageMetadata.version,
     ...(token === undefined ? {} : { "X-Plex-Token": token }),
   };
 }

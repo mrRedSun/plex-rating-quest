@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createDiagnosticReport, logError, logEvent } from "../lib/diagnostics";
+import packageMetadata from "../package.json";
 
 describe("privacy-safe diagnostics", () => {
   beforeEach(() => window.sessionStorage.clear());
@@ -30,5 +31,10 @@ describe("privacy-safe diagnostics", () => {
       events: readonly unknown[];
     };
     expect(parsed.events).toHaveLength(400);
+  });
+
+  it("reports the deployed package version", () => {
+    const parsed = JSON.parse(createDiagnosticReport()) as { version: string };
+    expect(parsed.version).toBe(packageMetadata.version);
   });
 });

@@ -1368,13 +1368,79 @@ export const PlexRatingQuest = observer(
     const stage = useQuestStore((state) => state.stage);
     const mediaCount = useQuestStore((state) => state.media.length);
     const setStage = useQuestStore((state) => state.setStage);
+    const accessToken = useQuestStore((state) => state.accessToken);
+    const accountId = useQuestStore((state) => state.accountId);
+    const selectedServer = useQuestStore((state) => state.selectedServer);
+    const isDemo = useQuestStore((state) => state.isDemo);
+    const refreshPlexContent = useQuestStore(
+      (state) => state.refreshPlexContent,
+    );
     const reducedMotion = useReducedMotion();
     const historyInitialized = useRef(false);
     const skipNextHistoryWrite = useRef(false);
+    const artworkRefresh = useRef({ lastAttemptAt: 0, running: false });
     useEffect(() => {
       document.documentElement.dataset.motion =
         reducedMotion === true ? "reduced" : "full";
     }, [reducedMotion]);
+    useEffect(() => {
+      let active = true;
+      const refresh = async (
+        minimumIntervalMs: number,
+        reason: "image_error" | "session_restore" | "tab_visible",
+      ): Promise<void> => {
+        const now = Date.now();
+        const recentlyAttempted =
+          now - artworkRefresh.current.lastAttemptAt < minimumIntervalMs;
+        if (
+          isDemo ||
+          mediaCount === 0 ||
+          accessToken === null ||
+          accountId === null ||
+          selectedServer === null ||
+          artworkRefresh.current.running ||
+          recentlyAttempted
+        )
+          return;
+        artworkRefresh.current = { lastAttemptAt: now, running: true };
+        logEvent("plex.content.refresh.started", { reason });
+        try {
+          const libraries = await fetchPlexLibraries(selectedServer);
+          const media = await fetchPlexMedia(selectedServer, libraries, {
+            id: accountId,
+            token: accessToken,
+          });
+          if (active) refreshPlexContent({ libraries, media });
+        } catch (reason) {
+          logError("plex.content.refresh.failed", reason);
+        } finally {
+          artworkRefresh.current.running = false;
+        }
+      };
+      const handleVisibility = (): void => {
+        if (document.visibilityState === "visible")
+          void refresh(30 * 60 * 1000, "tab_visible");
+      };
+      const handleImageError = (event: Event): void => {
+        if (event.target instanceof HTMLImageElement)
+          void refresh(60 * 1000, "image_error");
+      };
+      void refresh(30 * 60 * 1000, "session_restore");
+      document.addEventListener("visibilitychange", handleVisibility);
+      document.addEventListener("error", handleImageError, true);
+      return () => {
+        active = false;
+        document.removeEventListener("visibilitychange", handleVisibility);
+        document.removeEventListener("error", handleImageError, true);
+      };
+    }, [
+      accessToken,
+      accountId,
+      isDemo,
+      mediaCount,
+      refreshPlexContent,
+      selectedServer,
+    ]);
     useEffect(() => {
       const state = { [HISTORY_STAGE_KEY]: stage };
       if (!historyInitialized.current) {
