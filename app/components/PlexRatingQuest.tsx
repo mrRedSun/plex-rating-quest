@@ -38,6 +38,7 @@ import {
   fetchPlexServers,
   readPendingPlexPin,
   resolvePlexServer,
+  restorePlexSession,
   savePendingPlexPin,
   type PlexPin,
   waitForPlexToken,
@@ -118,6 +119,31 @@ function formatDate(value: string): string {
 
 async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value);
+}
+
+function useSessionRestoration(
+  token: string | null,
+  setPlexAuth: (auth: {
+    readonly token: string;
+    readonly accountId: string;
+    readonly accountName: string;
+  }) => void,
+): void {
+  useEffect(() => {
+    if (token !== null) return;
+    let active = true;
+    void restorePlexSession().then((account) => {
+      if (active && account !== null)
+        setPlexAuth({
+          token: "server-session",
+          accountId: account.id,
+          accountName: account.displayName,
+        });
+    });
+    return () => {
+      active = false;
+    };
+  }, [setPlexAuth, token]);
 }
 
 const Welcome = observer(function Welcome(): React.ReactElement {
@@ -251,6 +277,8 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     },
     [accountId, choices, finishConnection, token],
   );
+
+  useSessionRestoration(token, setPlexAuth);
 
   useEffect(() => {
     const pendingPin = readPendingPlexPin();

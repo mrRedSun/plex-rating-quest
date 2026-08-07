@@ -245,7 +245,11 @@ describe("resumable Plex authentication", () => {
     ).not.toContain("private-token");
   });
 
-  it("logs out and clears account-derived state", () => {
+  it("logs out and clears account-derived state", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
     const store = new QuestStore();
     store.setPlexAuth({
       token: "server-session",
@@ -263,7 +267,7 @@ describe("resumable Plex authentication", () => {
       media: [],
     });
 
-    store.logout();
+    await store.logout();
 
     expect(store.accessToken).toBeNull();
     expect(store.selectedServer).toBeNull();
@@ -271,7 +275,11 @@ describe("resumable Plex authentication", () => {
     expect(store.stage).toBe("welcome");
   });
 
-  it("persists Plex authorization through reloads until logout", () => {
+  it("persists Plex authorization through reloads until logout", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
     const store = new QuestStore();
     store.setPlexAuth({
       token: "server-session",
@@ -288,7 +296,7 @@ describe("resumable Plex authentication", () => {
     expect(restored.userName).toBe("movie-fan");
     expect(restored.stage).toBe("welcome");
 
-    restored.logout();
+    await restored.logout();
     expect(restored.accessToken).toBeNull();
     expect(restored.accountId).toBeNull();
   });

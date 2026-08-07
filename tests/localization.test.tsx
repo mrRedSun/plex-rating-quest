@@ -13,14 +13,14 @@ import { getLocale, setLocale, translate } from "../lib/localization";
 import { questStore } from "../store/quest-store";
 
 describe("Ukrainian localization", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     window.localStorage.clear();
-    questStore.logout();
+    await questStore.logout();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
-    questStore.logout();
+    await questStore.logout();
     document.documentElement.lang = "en";
   });
 

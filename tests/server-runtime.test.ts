@@ -65,6 +65,7 @@ describe("protected backend runtime", () => {
         DATA_DIRECTORY: directory,
         PORT: String(port),
         SESSION_SECRET: "runtime-test-secret-that-is-longer-than-32-characters",
+        PUBLIC_ORIGIN: origin,
         STATIC_DIRECTORY: join(process.cwd(), "public"),
       },
       stdio: "ignore",

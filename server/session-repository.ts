@@ -46,6 +46,7 @@ export class SessionRepository {
       log("session.store.loaded", {
         sessionCount: Object.keys(this.#sessions).length,
       });
+      this.#purgeExpired();
     } catch (reason) {
       if ((reason as NodeJS.ErrnoException).code !== "ENOENT")
         throw new Error(
@@ -71,6 +72,9 @@ export class SessionRepository {
   }
 
   create(response: ServerResponse): SessionContext {
+    this.#purgeExpired();
+    if (Object.keys(this.#sessions).length >= 1000)
+      throw new Error("Session capacity reached");
     const id = randomBytes(32).toString("base64url");
     const record: SessionRecord = {
       createdAt: Date.now(),
@@ -80,6 +84,15 @@ export class SessionRepository {
     this.#sessions[id] = record;
     response.setHeader("Set-Cookie", this.#cookie(id, MAX_AGE_SECONDS));
     return { id, record };
+  }
+
+  rotate(session: SessionContext, response: ServerResponse): SessionContext {
+    const id = randomBytes(32).toString("base64url");
+    Reflect.deleteProperty(this.#sessions, session.id);
+    session.record.updatedAt = Date.now();
+    this.#sessions[id] = session.record;
+    response.setHeader("Set-Cookie", this.#cookie(id, MAX_AGE_SECONDS));
+    return { id, record: session.record };
   }
 
   async delete(
@@ -119,5 +132,11 @@ export class SessionRepository {
     const temporaryFile = `${this.#config.sessionFile}.tmp`;
     await writeFile(temporaryFile, payload, { mode: 0o600 });
     await rename(temporaryFile, this.#config.sessionFile);
+  }
+
+  #purgeExpired(): void {
+    const cutoff = Date.now() - MAX_AGE_SECONDS * 1000;
+    for (const [id, record] of Object.entries(this.#sessions))
+      if (record.updatedAt < cutoff) Reflect.deleteProperty(this.#sessions, id);
   }
 }

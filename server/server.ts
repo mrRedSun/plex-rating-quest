@@ -10,7 +10,7 @@ import { serveStatic } from "./static-files.js";
 const config = loadConfig();
 const sessions = new SessionRepository(config);
 await sessions.initialize();
-const api = new ApiRouter(sessions, new PlexGateway(config));
+const api = new ApiRouter(sessions, new PlexGateway(config), config);
 
 const server = createServer((request, response) => {
   const startedAt = performance.now();
@@ -44,6 +44,11 @@ const server = createServer((request, response) => {
     else response.destroy();
   });
 });
+server.requestTimeout = 30_000;
+server.headersTimeout = 10_000;
+server.keepAliveTimeout = 5_000;
+server.maxRequestsPerSocket = 100;
+server.maxHeadersCount = 64;
 
 server.listen(config.port, "0.0.0.0", () =>
   log("server.started", { port: config.port }),

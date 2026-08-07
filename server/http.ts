@@ -27,15 +27,14 @@ export function json(
   response.end(JSON.stringify(body));
 }
 
-export function isSameOrigin(request: IncomingMessage): boolean {
+export function isSameOrigin(
+  request: IncomingMessage,
+  publicOrigin: string,
+): boolean {
   const origin = request.headers.origin;
   if (origin === undefined) return false;
   try {
-    const forwardedHost = request.headers["x-forwarded-host"];
-    const host =
-      (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost) ??
-      request.headers.host;
-    return host !== undefined && new URL(origin).host === host;
+    return new URL(origin).origin === publicOrigin;
   } catch {
     return false;
   }

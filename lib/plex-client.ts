@@ -740,3 +740,28 @@ export async function destroyPlexSession(): Promise<void> {
   const response = await fetch("/api/auth/logout", { method: "POST" });
   if (!response.ok) throw new Error(`Logout failed (${response.status})`);
 }
+
+export async function restorePlexSession(): Promise<PlexAccount | null> {
+  try {
+    const response = await fetch("/api/auth/session");
+    if (!response.ok) return null;
+    const parsed = z
+      .object({ authenticated: z.boolean(), account: userSchema.nullable() })
+      .parse(await response.json());
+    if (!parsed.authenticated || parsed.account === null) return null;
+    const username = parsed.account.username?.trim();
+    const title = parsed.account.title?.trim();
+    return {
+      id: parsed.account.uuid,
+      displayName:
+        username !== undefined && username.length > 0
+          ? username
+          : title !== undefined && title.length > 0
+            ? title
+            : "Plex member",
+    };
+  } catch (reason) {
+    logError("auth.session.restore.failed", reason);
+    return null;
+  }
+}

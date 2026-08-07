@@ -12,7 +12,7 @@ The application is self-hosted but no longer browser-only. Its container serves 
 - Session records are AES-256-GCM encrypted in the `plex-rating-quest-data` Docker volume.
 - The Compose-mounted `secrets/session_secret` file is the encryption key material. Losing it invalidates stored sessions; exposing it compromises them.
 - Ratings are sent to Plex only after the user confirms the batch.
-- Quest progress, filters, and tier lists remain in browser storage.
+- Quest progress, filters, viewing titles/dates, ratings, and tier lists remain only in the current tab's session storage and are cleared when the tab session ends or logout succeeds.
 
 The container can reach Plex account services and the Plex server connections returned by Plex. Operators are responsible for protecting the host, volume, encryption secret, TLS reverse proxy, and network path.
 
@@ -63,12 +63,16 @@ Deployment agents must use the published image with `docker compose pull`. They 
 
 ## Configuration
 
-| Variable                          | Required | Default                    | Purpose                                            |
-| --------------------------------- | -------- | -------------------------- | -------------------------------------------------- |
-| `PLEX_RATING_SESSION_SECRET_FILE` | No       | `./secrets/session_secret` | Host path to the Compose-mounted encryption secret |
-| `PLEX_RATING_PORT`                | No       | `8080`                     | Host port bound to the application                 |
+| Variable                          | Required | Default                    | Purpose                                                                      |
+| --------------------------------- | -------- | -------------------------- | ---------------------------------------------------------------------------- |
+| `PLEX_RATING_SESSION_SECRET_FILE` | No       | `./secrets/session_secret` | Host path to the Compose-mounted encryption secret                           |
+| `PLEX_RATING_PORT`                | No       | `8080`                     | Host port bound to the application                                           |
+| `PLEX_RATING_PUBLIC_ORIGIN`       | Yes      | none                       | Exact public HTTPS origin used for CSRF validation                           |
+| `PLEX_ALLOWED_PRIVATE_HOSTS`      | No       | empty                      | Exact comma-separated Plex hosts allowed to resolve to private/LAN addresses |
 
 Never rotate `secrets/session_secret` as part of a routine upgrade. Back up the secret separately from the encrypted volume and restrict both to the deployment operator.
+
+Private, loopback, link-local, multicast, and metadata destinations are denied by default. If the container must connect directly to a LAN Plex address, add only that exact IP address or hostname to `PLEX_ALLOWED_PRIVATE_HOSTS`; prefer Plex's remote or relay HTTPS connection when possible.
 
 ## Upgrade and rollback
 

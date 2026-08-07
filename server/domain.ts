@@ -16,6 +16,7 @@ export interface SessionRecord {
   updatedAt: number;
   pendingPin?: PendingPin;
   token?: string;
+  account?: PlexAccountDto;
   servers: Record<string, readonly ServerConnection[]>;
 }
 
@@ -49,4 +50,10 @@ export interface PlexResourceResponse {
   readonly provides: string;
   readonly accessToken?: string;
   readonly connections: readonly PlexConnectionResponse[];
+}
+
+export interface PlexAccountDto {
+  readonly uuid: string;
+  readonly username?: string | null;
+  readonly title?: string | null;
 }

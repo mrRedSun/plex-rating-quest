@@ -42,6 +42,20 @@ git pull --ff-only
 if [ ! -f .env ]; then cp .env.example .env; fi
 ```
 
+Set `PLEX_RATING_PUBLIC_ORIGIN` in `.env` to the exact externally visible HTTPS origin, without a trailing path. Example:
+
+```bash
+sed -i 's|^PLEX_RATING_PUBLIC_ORIGIN=.*|PLEX_RATING_PUBLIC_ORIGIN=https://plexquest.example.com|' .env
+```
+
+Replace the example hostname with the real deployment hostname before continuing.
+
+Leave `PLEX_ALLOWED_PRIVATE_HOSTS` empty unless remote/relay Plex access is unavailable. For a direct LAN connection, set it to the exact Plex hostname or IP returned for your server, never an entire domain or subnet:
+
+```bash
+PLEX_ALLOWED_PRIVATE_HOSTS=192.168.1.20
+```
+
 Generate the Compose secret exactly once if it does not exist:
 
 ```bash

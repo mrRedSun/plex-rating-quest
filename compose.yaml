@@ -5,9 +5,11 @@ services:
     container_name: plex-rating-quest
     restart: unless-stopped
     ports:
-      - "${PLEX_RATING_PORT:-8080}:8080"
+      - "127.0.0.1:${PLEX_RATING_PORT:-8080}:8080"
     environment:
       SESSION_SECRET_FILE: /run/secrets/session_secret
+      PUBLIC_ORIGIN: "${PLEX_RATING_PUBLIC_ORIGIN:?Set the public HTTPS origin in .env}"
+      PLEX_ALLOWED_PRIVATE_HOSTS: "${PLEX_ALLOWED_PRIVATE_HOSTS:-}"
     secrets:
       - session_secret
     volumes:
