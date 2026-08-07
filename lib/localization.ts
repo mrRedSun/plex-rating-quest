@@ -5,12 +5,14 @@ const STORAGE_KEY = "plex-rating-quest-locale";
 const CHANGE_EVENT = "plex-rating-quest-locale-change";
 
 const UKRAINIAN: Readonly<Record<string, string>> = {
-  "Browser-only · no server": "Лише у браузері · без сервера",
+  "Protected session · self-hosted": "Захищена сесія · власний сервер",
   "Your watch history, reimagined": "Ваша історія переглядів по-новому",
   "Rate your library.": "Оцініть свою медіатеку.",
   "Finish the quest.": "Завершіть квест.",
   "Turn a mountain of watched titles into a fast, cinematic rating game. Nothing reaches Plex until you say so.":
     "Перетворіть гору переглянутих тайтлів на швидку кінематографічну гру з оцінюванням. Нічого не потрапить у Plex без вашого підтвердження.",
+  "Your self-hosted container connects to Plex for you. Plex tokens are encrypted in its persistent volume and never exposed to browser JavaScript. Your browser receives only a secure, HttpOnly session cookie; logging out deletes the server-side session.":
+    "Ваш власний контейнер підключається до Plex від вашого імені. Токени Plex зберігаються зашифрованими в постійному томі й ніколи не передаються JavaScript у браузері. Браузер отримує лише захищений HttpOnly cookie сесії; вихід видаляє серверну сесію.",
   "Continue with Plex": "Увійти через Plex",
   "Waiting for Plex": "Очікуємо на Plex",
   "Load my Plex data": "Завантажити мої дані Plex",

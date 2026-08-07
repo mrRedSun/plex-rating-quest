@@ -237,7 +237,7 @@ describe("resumable Plex authentication", () => {
       }),
     ]);
     expect(request).toHaveBeenCalledWith(
-      "https://community.plex.tv/api",
+      "/api/plex/community",
       expect.objectContaining({ method: "POST" }),
     );
     expect(
@@ -248,7 +248,7 @@ describe("resumable Plex authentication", () => {
   it("logs out and clears account-derived state", () => {
     const store = new QuestStore();
     store.setPlexAuth({
-      token: "private-token",
+      token: "server-session",
       accountId: "account-id",
       accountName: "movie-fan",
     });
@@ -274,7 +274,7 @@ describe("resumable Plex authentication", () => {
   it("persists Plex authorization through reloads until logout", () => {
     const store = new QuestStore();
     store.setPlexAuth({
-      token: "private-token",
+      token: "server-session",
       accountId: "account-id",
       accountName: "movie-fan",
     });
@@ -283,7 +283,7 @@ describe("resumable Plex authentication", () => {
     stopPersistence();
 
     const restored = new QuestStore();
-    expect(restored.accessToken).toBe("private-token");
+    expect(restored.accessToken).toBe("server-session");
     expect(restored.accountId).toBe("account-id");
     expect(restored.userName).toBe("movie-fan");
     expect(restored.stage).toBe("welcome");
@@ -291,5 +291,36 @@ describe("resumable Plex authentication", () => {
     restored.logout();
     expect(restored.accessToken).toBeNull();
     expect(restored.accountId).toBeNull();
+  });
+
+  it("removes legacy browser-stored Plex tokens during migration", () => {
+    window.localStorage.setItem(
+      "plex-rating-quest-session",
+      JSON.stringify({
+        stage: "mode",
+        userName: "movie-fan",
+        accountId: "account-id",
+        accessToken: "legacy-private-token",
+        servers: [
+          {
+            name: "Server",
+            uri: "https://lan",
+            accessToken: "server-token",
+          },
+        ],
+        selectedServer: {
+          name: "Server",
+          uri: "https://lan",
+          accessToken: "server-token",
+        },
+      }),
+    );
+
+    const migrated = new QuestStore();
+    expect(migrated.accessToken).toBeNull();
+    expect(migrated.accountId).toBeNull();
+    expect(migrated.servers).toEqual([]);
+    expect(migrated.selectedServer).toBeNull();
+    expect(migrated.stage).toBe("welcome");
   });
 });

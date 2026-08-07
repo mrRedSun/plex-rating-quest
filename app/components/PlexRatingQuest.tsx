@@ -271,7 +271,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
       <header className="topbar">
         <Brand />
         <div className="privacy-pill">
-          <LockKeyhole size={14} /> Browser-only · no server
+          <LockKeyhole size={14} /> Protected session · self-hosted
         </div>
       </header>
       <section className="welcome-grid">
@@ -291,6 +291,12 @@ const Welcome = observer(function Welcome(): React.ReactElement {
           <p className="lede">
             Turn a mountain of watched titles into a fast, cinematic rating
             game. Nothing reaches Plex until you say so.
+          </p>
+          <p className="security-note">
+            Your self-hosted container connects to Plex for you. Plex tokens are
+            encrypted in its persistent volume and never exposed to browser
+            JavaScript. Your browser receives only a secure, HttpOnly session
+            cookie; logging out deletes the server-side session.
           </p>
           <div className="welcome-actions">
             {token === null ? (

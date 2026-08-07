@@ -3,6 +3,9 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: { "/api": "http://127.0.0.1:8081" },
+  },
   build: {
     assetsInlineLimit: 4096,
     cssCodeSplit: true,
@@ -14,8 +17,19 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id): string | undefined {
-          if (id.includes("framer-motion") || id.includes("motion-dom") || id.includes("motion-utils")) return "vendor-motion";
-          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/") || id.includes("/zustand/")) return "vendor-react";
+          if (
+            id.includes("framer-motion") ||
+            id.includes("motion-dom") ||
+            id.includes("motion-utils")
+          )
+            return "vendor-motion";
+          if (
+            id.includes("/react/") ||
+            id.includes("/react-dom/") ||
+            id.includes("/scheduler/") ||
+            id.includes("/zustand/")
+          )
+            return "vendor-react";
           if (id.includes("/lucide-react/")) return "vendor-ui";
           if (id.includes("/zod/")) return "vendor-validation";
           return undefined;

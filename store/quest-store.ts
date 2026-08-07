@@ -2,7 +2,8 @@
 
 import { autorun, makeAutoObservable, runInAction } from "mobx";
 import { DEMO_MEDIA } from "../lib/demo-data";
-import { clearDiagnostics, logEvent } from "../lib/diagnostics";
+import { clearDiagnostics, logError, logEvent } from "../lib/diagnostics";
+import { destroyPlexSession } from "../lib/plex-client";
 import { DEFAULT_FILTERS, filterMedia } from "../lib/quest";
 import type {
   MediaItem,
@@ -55,6 +56,27 @@ function readPersistedState(): Partial<PersistedQuestState> {
   }
 }
 
+function migratePersistedState(
+  persisted: Partial<PersistedQuestState>,
+): Partial<PersistedQuestState> {
+  if (
+    persisted.accessToken === undefined ||
+    persisted.accessToken === null ||
+    persisted.accessToken === "server-session"
+  )
+    return persisted;
+  logEvent("auth.legacy_token.removed", {}, "warn");
+  return {
+    ...persisted,
+    stage: "welcome",
+    userName: "Explorer",
+    accountId: null,
+    accessToken: null,
+    servers: [],
+    selectedServer: null,
+  };
+}
+
 export class QuestStore {
   stage: QuestStage = "welcome";
   userName = "Explorer";
@@ -78,7 +100,7 @@ export class QuestStore {
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
     if (typeof window !== "undefined")
-      Object.assign(this, readPersistedState());
+      Object.assign(this, migratePersistedState(readPersistedState()));
   }
 
   startPersistence(): () => void {
@@ -307,6 +329,9 @@ export class QuestStore {
 
   logout(): void {
     logEvent("auth.logout");
+    void destroyPlexSession().catch((reason: unknown) => {
+      logError("auth.logout.failed", reason);
+    });
     this.resetQuestState();
     this.accountId = null;
     this.accessToken = null;

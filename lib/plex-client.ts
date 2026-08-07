@@ -4,16 +4,17 @@ import { logError, logEvent } from "./diagnostics";
 import type { MediaItem, PlexAccount, PlexLibrary, PlexServer } from "./types";
 
 const PRODUCT = "Plex Rating Quest";
-const PIN_ENDPOINT = "https://plex.tv/api/v2/pins";
-const RESOURCE_ENDPOINT = "https://plex.tv/api/v2/resources";
-const USER_ENDPOINT = "https://plex.tv/api/v2/user";
-const COMMUNITY_ENDPOINT = "https://community.plex.tv/api";
+const PIN_ENDPOINT = "/api/auth/pin";
+const RESOURCE_ENDPOINT = "/api/plex/resources";
+const USER_ENDPOINT = "/api/plex/user";
+const COMMUNITY_ENDPOINT = "/api/plex/community";
 const PENDING_PIN_KEY = "plex-rating-quest-pending-pin";
 const PIN_MAX_AGE_MS = 10 * 60 * 1000;
 
 const pinSchema = z.object({
   id: z.number(),
   code: z.string(),
+  clientId: z.string().optional(),
   authToken: z.string().nullable().optional(),
 });
 const resourceSchema = z.array(
@@ -178,6 +179,7 @@ const RATINGS_QUERY = `
 export interface PlexPin {
   readonly id: number;
   readonly code: string;
+  readonly clientId?: string;
 }
 
 const pendingPinSchema = z.object({
@@ -226,12 +228,10 @@ function getClientId(): string {
 }
 
 function headers(token?: string): HeadersInit {
+  void token;
   return {
     Accept: "application/json",
-    "X-Plex-Client-Identifier": getClientId(),
-    "X-Plex-Product": PRODUCT,
-    "X-Plex-Version": packageMetadata.version,
-    ...(token === undefined ? {} : { "X-Plex-Token": token }),
+    "X-Plex-Client-Version": packageMetadata.version,
   };
 }
 
@@ -273,17 +273,20 @@ export async function createPlexPin(): Promise<PlexPin> {
   const response = await checkedFetch("pin.create", PIN_ENDPOINT, {
     method: "POST",
     headers: requestHeaders,
-    body: new URLSearchParams({ strong: "true" }),
   });
   const pin = pinSchema.parse(await response.json());
   logEvent("auth.pin.create.completed");
-  return { id: pin.id, code: pin.code };
+  return {
+    id: pin.id,
+    code: pin.code,
+    ...(pin.clientId === undefined ? {} : { clientId: pin.clientId }),
+  };
 }
 
 export function buildPlexAuthUrl(pin: PlexPin): string {
   logEvent("auth.window.prepared");
   const parameters = new URLSearchParams({
-    clientID: getClientId(),
+    clientID: pin.clientId ?? getClientId(),
     code: pin.code,
     forwardUrl: window.location.href,
     "context[device][product]": PRODUCT,
@@ -295,20 +298,21 @@ export async function waitForPlexToken(
   pin: PlexPin,
   signal: AbortSignal,
 ): Promise<string> {
+  void pin;
   let attempts = 0;
   logEvent("auth.polling.started");
   while (!signal.aborted) {
     attempts += 1;
-    const url = new URL(`${PIN_ENDPOINT}/${pin.id}`);
-    url.searchParams.set("code", pin.code);
-    const response = await checkedFetch("pin.poll", url, {
+    const response = await checkedFetch("pin.poll", "/api/auth/status", {
       headers: headers(),
       signal,
     });
-    const parsed = pinSchema.parse(await response.json());
-    if (parsed.authToken !== undefined && parsed.authToken !== null) {
+    const parsed = z
+      .object({ authenticated: z.boolean() })
+      .parse(await response.json());
+    if (parsed.authenticated) {
       logEvent("auth.polling.completed", { attempts });
-      return parsed.authToken;
+      return "server-session";
     }
     await new Promise<void>((resolve) => window.setTimeout(resolve, 1200));
   }
@@ -317,10 +321,7 @@ export async function waitForPlexToken(
 
 export async function fetchPlexServers(token: string): Promise<PlexServer[]> {
   logEvent("plex.discovery.started");
-  const url = new URL(RESOURCE_ENDPOINT);
-  url.searchParams.set("includeHttps", "1");
-  url.searchParams.set("includeRelay", "1");
-  const response = await checkedFetch("server.discovery", url, {
+  const response = await checkedFetch("server.discovery", RESOURCE_ENDPOINT, {
     headers: headers(token),
   });
   const resources = resourceSchema.parse(await response.json());
@@ -330,7 +331,8 @@ export async function fetchPlexServers(token: string): Promise<PlexServer[]> {
       .filter(
         (entry) =>
           window.location.protocol !== "https:" ||
-          entry.uri.startsWith("https://"),
+          entry.uri.startsWith("https://") ||
+          entry.uri.startsWith("/api/"),
       )
       .toSorted((left, right) => {
         const score = (entry: (typeof resource.connections)[number]): number =>
@@ -341,7 +343,6 @@ export async function fetchPlexServers(token: string): Promise<PlexServer[]> {
       ...new Set(connections.map((connection) => connection.uri)),
     ];
     const connection = connectionUris[0];
-    const accessToken = resource.accessToken ?? token;
     return connection === undefined
       ? []
       : [
@@ -349,7 +350,7 @@ export async function fetchPlexServers(token: string): Promise<PlexServer[]> {
             name: resource.name,
             uri: connection,
             connectionUris,
-            accessToken,
+            accessToken: "server-session",
           },
         ];
   });
@@ -657,13 +658,8 @@ export async function fetchPlexMedia(
             ? "Never"
             : new Date(item.lastViewedAt * 1000).toISOString(),
         posterUrl:
-          item.thumb === undefined
-            ? null
-            : `${server.uri}${item.thumb}?X-Plex-Token=${encodeURIComponent(server.accessToken)}`,
-        backdropUrl:
-          item.art === undefined
-            ? null
-            : `${server.uri}${item.art}?X-Plex-Token=${encodeURIComponent(server.accessToken)}`,
+          item.thumb === undefined ? null : `${server.uri}${item.thumb}`,
+        backdropUrl: item.art === undefined ? null : `${server.uri}${item.art}`,
         audienceRating: item.audienceRating ?? null,
         criticRating: item.rating ?? null,
         userRating: item.userRating ?? null,
@@ -730,7 +726,7 @@ export async function applyPlexRating(
   mediaId: string,
   value: number | null,
 ): Promise<void> {
-  const url = new URL(`${server.uri}/:/rate`);
+  const url = new URL(`${server.uri}/:/rate`, window.location.origin);
   url.searchParams.set("key", mediaId);
   url.searchParams.set("identifier", "com.plexapp.plugins.library");
   url.searchParams.set("rating", value === null ? "-1" : String(value));
@@ -738,4 +734,9 @@ export async function applyPlexRating(
     method: "PUT",
     headers: headers(server.accessToken),
   });
+}
+
+export async function destroyPlexSession(): Promise<void> {
+  const response = await fetch("/api/auth/logout", { method: "POST" });
+  if (!response.ok) throw new Error(`Logout failed (${response.status})`);
 }

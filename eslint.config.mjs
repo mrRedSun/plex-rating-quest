@@ -8,6 +8,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 export default defineConfig([
   globalIgnores([
     "dist/**",
+    "server-dist/**",
     "coverage/**",
     "node_modules/**",
     "*.config.{ts,mjs}",
@@ -70,6 +71,10 @@ export default defineConfig([
       ],
       "prefer-const": "error",
     },
+  },
+  {
+    files: ["server/**/*.ts"],
+    languageOptions: { globals: globals.node },
   },
   {
     files: ["tests/**/*.{ts,tsx}"],
