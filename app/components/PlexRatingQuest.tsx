@@ -37,6 +37,7 @@ import {
   fetchPlexMedia,
   fetchPlexServers,
   readPendingPlexPin,
+  resolvePlexServer,
   savePendingPlexPin,
   type PlexPin,
   waitForPlexToken,
@@ -139,15 +140,15 @@ const Welcome = observer(function Welcome(): React.ReactElement {
       server: PlexServer,
       servers: readonly PlexServer[],
     ): Promise<void> => {
-      const libraries = await fetchPlexLibraries(server);
-      const media = await fetchPlexMedia(server, libraries, {
+      const resolved = await resolvePlexServer(server);
+      const media = await fetchPlexMedia(resolved.server, resolved.libraries, {
         id: connectedAccountId,
         token: accessToken,
       });
       setPlexData({
         servers,
-        selectedServer: server,
-        libraries,
+        selectedServer: resolved.server,
+        libraries: resolved.libraries,
         media,
       });
     },

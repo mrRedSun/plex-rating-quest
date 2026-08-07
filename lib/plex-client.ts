@@ -326,16 +326,32 @@ export async function fetchPlexServers(token: string): Promise<PlexServer[]> {
   const resources = resourceSchema.parse(await response.json());
   const servers = resources.flatMap((resource) => {
     if (!resource.provides.split(",").includes("server")) return [];
-    const connection =
-      resource.connections.find(
-        (entry) => entry.local === true && entry.uri.startsWith("https://"),
-      ) ??
-      resource.connections.find((entry) => entry.uri.startsWith("https://")) ??
-      resource.connections[0];
+    const connections = resource.connections
+      .filter(
+        (entry) =>
+          window.location.protocol !== "https:" ||
+          entry.uri.startsWith("https://"),
+      )
+      .toSorted((left, right) => {
+        const score = (entry: (typeof resource.connections)[number]): number =>
+          (entry.relay === true ? 20 : 0) + (entry.local === true ? 10 : 0);
+        return score(left) - score(right);
+      });
+    const connectionUris = [
+      ...new Set(connections.map((connection) => connection.uri)),
+    ];
+    const connection = connectionUris[0];
     const accessToken = resource.accessToken ?? token;
     return connection === undefined
       ? []
-      : [{ name: resource.name, uri: connection.uri, accessToken }];
+      : [
+          {
+            name: resource.name,
+            uri: connection,
+            connectionUris,
+            accessToken,
+          },
+        ];
   });
   logEvent("plex.discovery.completed", { serverCount: servers.length });
   return servers;
@@ -561,12 +577,16 @@ async function fetchPlexRatings(
 
 export async function fetchPlexLibraries(
   server: PlexServer,
+  signal?: AbortSignal,
 ): Promise<PlexLibrary[]> {
   logEvent("plex.libraries.started");
   const response = await checkedFetch(
     "libraries.fetch",
     `${server.uri}/library/sections`,
-    { headers: headers(server.accessToken) },
+    {
+      headers: headers(server.accessToken),
+      ...(signal === undefined ? {} : { signal }),
+    },
   );
   const parsed = librarySchema.parse(await response.json());
   const libraries = parsed.MediaContainer.Directory.map((library) => ({
@@ -576,6 +596,38 @@ export async function fetchPlexLibraries(
   }));
   logEvent("plex.libraries.completed", { libraryCount: libraries.length });
   return libraries;
+}
+
+export async function resolvePlexServer(
+  server: PlexServer,
+): Promise<{ readonly server: PlexServer; readonly libraries: PlexLibrary[] }> {
+  const connectionUris = server.connectionUris ?? [server.uri];
+  let lastError: unknown = new Error("Plex server has no usable connections");
+  for (const [index, uri] of connectionUris.entries()) {
+    const candidate = { ...server, uri };
+    logEvent("plex.connection.attempted", {
+      attempt: index + 1,
+      candidateCount: connectionUris.length,
+    });
+    try {
+      const libraries = await fetchPlexLibraries(
+        candidate,
+        AbortSignal.timeout(6000),
+      );
+      logEvent("plex.connection.selected", {
+        attempt: index + 1,
+        candidateCount: connectionUris.length,
+      });
+      return { server: candidate, libraries };
+    } catch (reason) {
+      lastError = reason;
+      logError("plex.connection.rejected", reason, { attempt: index + 1 });
+    }
+  }
+  throw new Error(
+    "None of this Plex server's connections are reachable from this browser.",
+    { cause: lastError },
+  );
 }
 
 export async function fetchPlexMedia(

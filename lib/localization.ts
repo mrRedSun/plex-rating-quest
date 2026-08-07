@@ -217,6 +217,8 @@ const UKRAINIAN: Readonly<Record<string, string>> = {
   "No reachable Plex Media Server was found.":
     "Не знайдено доступного Plex Media Server.",
   "No Plex server was selected.": "Сервер Plex не вибрано.",
+  "None of this Plex server's connections are reachable from this browser.":
+    "Жодне підключення до цього сервера Plex не доступне з цього браузера.",
   "Plex connection failed.": "Не вдалося підключитися до Plex.",
   "Plex data pull failed.": "Не вдалося завантажити дані Plex.",
   "Image export failed.": "Не вдалося експортувати зображення.",
