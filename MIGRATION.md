@@ -1,15 +1,15 @@
-# Deployment-agent migration: v2 static container to v3 protected sessions
+# Deployment-agent migration: any earlier release to v4 Fastify backend
 
 ## Objective
 
-Replace an existing Plex Rating Quest deployment with the published v3 container. This is a clean cutover, not an application-data migration. V3 adds a backend, an encrypted persistent session store, an HttpOnly cookie, and a Docker volume. Existing browser-side Plex tokens are deliberately discarded; sign in to Plex once after deployment.
+Replace the deployment with the published v4 container. This is a clean cutover: v4 uses Fastify and SQLite with encrypted session payloads. Existing sessions from the v3 encrypted-file backend are deliberately not imported; sign in to Plex once after deployment. Watch history and ratings remain in Plex and require no migration.
 
 Do not build the container. Do not delete Docker volumes, unrelated containers, Git history, or the existing `.env` backup.
 
 ## Preconditions
 
 - Work in the existing repository checkout containing `compose.yaml`.
-- Confirm the HTTPS reverse proxy routes the public hostname to this service and preserves `Host` or supplies `X-Forwarded-Host`.
+- Confirm the HTTPS reverse proxy routes the public hostname to this service and preserves the original `Host` header.
 - Confirm Docker Compose v2 is available.
 - Record the currently deployed image for rollback:
 
@@ -20,7 +20,7 @@ docker compose ps
 
 ## Back up deployment configuration
 
-Create a restrictive backup directory outside the repository and copy deployment configuration and any existing v3 secret into it:
+Create a restrictive backup directory outside the repository and copy deployment configuration and any existing secret into it:
 
 ```bash
 backup_dir="$(mktemp -d /tmp/plex-rating-quest-migration.XXXXXX)"
@@ -96,7 +96,7 @@ Expected results:
 
 - Service status is `healthy`.
 - Health endpoint returns `ok`.
-- Logs contain `server.started` and no configuration or session-decryption error.
+- Logs contain `server started` and no configuration or session-decryption error.
 - Named volume `plex-rating-quest-data` exists.
 - Public HTTPS UI loads and displays `Protected session · self-hosted`.
 - A test user can complete Plex PIN sign-in, return to the app, load data, reload the page, and remain signed in.
@@ -104,7 +104,7 @@ Expected results:
 
 ## Roll back
 
-Rollback preserves the v3 volume for a later retry. Restore the backed-up Compose file and environment, then recreate the service:
+Rollback preserves the data volume for a later retry. Restore the backed-up Compose file and environment, then recreate the service:
 
 ```bash
 cp "$backup_dir/compose.yaml" compose.yaml
@@ -115,11 +115,11 @@ docker compose up -d --remove-orphans
 curl --fail --show-error http://127.0.0.1:${PLEX_RATING_PORT:-8080}/healthz
 ```
 
-Do not delete `plex-rating-quest-data`; rollback does not need it, and retaining it keeps encrypted sessions recoverable when v3 is redeployed with the same secret.
+Do not delete `plex-rating-quest-data`; retaining it keeps encrypted sessions recoverable with the matching release and secret.
 
 ## Operational ownership
 
 - Back up `secrets/session_secret` and the `plex-rating-quest-data` volume through separate protected channels.
 - Restore both together; encrypted sessions cannot be decrypted with a different secret.
 - Never print, commit, upload, or include the secret or volume contents in diagnostics.
-- Rotate the secret only after a suspected compromise. Rotation intentionally logs out every user; stop the service, archive or remove only the `sessions.enc` file from the named volume, replace `secrets/session_secret`, and restart.
+- Rotate the secret only after a suspected compromise. Rotation intentionally logs out every user. Stop the service, back up the named volume, remove only `sessions.sqlite`, `sessions.sqlite-wal`, and `sessions.sqlite-shm` from that volume, replace `secrets/session_secret`, and restart. Never remove the volume itself.

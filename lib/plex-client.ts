@@ -305,6 +305,7 @@ export async function waitForPlexToken(
     attempts += 1;
     const response = await checkedFetch("pin.poll", "/api/auth/status", {
       headers: headers(),
+      method: "POST",
       signal,
     });
     const parsed = z

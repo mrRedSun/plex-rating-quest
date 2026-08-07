@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ServerResponse } from "node:http";
 import {
   Agent,
   fetch as undiciFetch,
@@ -15,8 +15,16 @@ import type {
   PlexResourceResponse,
   SessionRecord,
 } from "./domain.js";
-import { readRequestBody } from "./http.js";
-import { log } from "./logger.js";
+
+interface GatewayLogger {
+  info(fields: Readonly<Record<string, unknown>>, message: string): void;
+  warn(fields: Readonly<Record<string, unknown>>, message: string): void;
+}
+
+const NOOP_LOGGER: GatewayLogger = {
+  info: () => undefined,
+  warn: () => undefined,
+};
 
 export const PLEX_ENDPOINTS = {
   pin: "https://plex.tv/api/v2/pins",
@@ -70,11 +78,17 @@ export class PlexGateway {
   readonly #allowedPrivateHosts: ReadonlySet<string>;
   readonly #dispatchers = new Map<string, Agent>();
   readonly #fetcher: typeof undiciFetch;
+  readonly #logger: GatewayLogger;
 
-  constructor(config: AppConfig, fetcher: typeof undiciFetch = undiciFetch) {
+  constructor(
+    config: AppConfig,
+    fetcher: typeof undiciFetch = undiciFetch,
+    logger: GatewayLogger = NOOP_LOGGER,
+  ) {
     this.#appVersion = config.appVersion;
     this.#allowedPrivateHosts = config.allowedPrivatePlexHosts;
     this.#fetcher = fetcher;
+    this.#logger = logger;
     this.#clientIdentifier = createHash("sha256")
       .update(`plex-rating-quest:${config.sessionSecret}`)
       .digest("hex")
@@ -180,23 +194,23 @@ export class PlexGateway {
 
   async proxyCommunity(
     record: SessionRecord,
-    request: IncomingMessage,
+    submitted: unknown,
   ): Promise<UndiciResponse> {
     if (record.token === undefined || record.account === undefined)
       throw new Error("Authentication required");
-    const submitted = JSON.parse(await readRequestBody(request)) as {
+    const requestBody = submitted as {
       readonly query?: unknown;
       readonly variables?: { readonly after?: unknown };
     };
     const operation =
-      typeof submitted.query === "string" &&
-      submitted.query.includes("GetWatchHistoryHub")
+      typeof requestBody.query === "string" &&
+      requestBody.query.includes("GetWatchHistoryHub")
         ? "history"
-        : typeof submitted.query === "string" &&
-            submitted.query.includes("GetRatingsHub")
+        : typeof requestBody.query === "string" &&
+            requestBody.query.includes("GetRatingsHub")
           ? "ratings"
           : null;
-    const after = submitted.variables?.after;
+    const after = requestBody.variables?.after;
     if (
       operation === null ||
       (after !== undefined && after !== null && typeof after !== "string")
@@ -224,7 +238,7 @@ export class PlexGateway {
 
   async proxyServer(
     record: SessionRecord,
-    request: IncomingMessage,
+    requestMethod: string,
     pathname: string,
     search: string,
   ): Promise<UndiciResponse> {
@@ -241,7 +255,7 @@ export class PlexGateway {
           ];
     if (connection === undefined)
       throw new Error("Unknown Plex server connection");
-    const method = request.method ?? "GET";
+    const method = requestMethod;
     const decoded = validateProxyPath(remainder, method);
     const connectionOrigin = new URL(connection.uri);
     const target = new URL(connectionOrigin);
@@ -306,6 +320,13 @@ export class PlexGateway {
     response.end();
   }
 
+  async close(): Promise<void> {
+    await Promise.all(
+      [...this.#dispatchers.values()].map((agent) => agent.close()),
+    );
+    this.#dispatchers.clear();
+  }
+
   async fetch(
     target: string | URL,
     init: RequestInit,
@@ -323,18 +344,24 @@ export class PlexGateway {
       } as Parameters<typeof undiciFetch>[1] & {
         readonly dispatcher: Dispatcher;
       });
-      log("plex.request.completed", {
-        operation,
-        status: response.status,
-        durationMs: Math.round(performance.now() - startedAt),
-      });
+      this.#logger.info(
+        {
+          operation,
+          status: response.status,
+          durationMs: Math.round(performance.now() - startedAt),
+        },
+        "Plex request completed",
+      );
       return response;
     } catch (reason) {
-      log("plex.request.failed", {
-        operation,
-        durationMs: Math.round(performance.now() - startedAt),
-        error: reason instanceof Error ? reason.name : "UnknownError",
-      });
+      this.#logger.warn(
+        {
+          operation,
+          durationMs: Math.round(performance.now() - startedAt),
+          errorName: reason instanceof Error ? reason.name : "UnknownError",
+        },
+        "Plex request failed",
+      );
       throw reason;
     }
   }
