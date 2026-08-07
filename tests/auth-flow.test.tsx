@@ -17,6 +17,7 @@ vi.mock("../lib/plex-client", async (importOriginal) => ({
   fetchPlexLibraries: vi.fn(),
   fetchPlexMedia: vi.fn(),
   fetchPlexServers: vi.fn(),
+  resolvePlexServer: vi.fn(),
 }));
 
 const SERVER: PlexServer = {
@@ -56,6 +57,12 @@ describe("durable separated Plex flows", () => {
     window.sessionStorage.clear();
     questStore.logout();
     vi.clearAllMocks();
+    vi.mocked(plexClient.resolvePlexServer).mockImplementation((server) =>
+      Promise.resolve({
+        server,
+        libraries: [{ id: "shows", title: "Shows", type: "show" }],
+      }),
+    );
     window.history.replaceState({}, "", "/");
   });
 

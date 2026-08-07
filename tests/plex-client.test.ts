@@ -3,7 +3,9 @@ import {
   clearPendingPlexPin,
   fetchPlexAccount,
   fetchPlexMedia,
+  fetchPlexServers,
   readPendingPlexPin,
+  resolvePlexServer,
   savePendingPlexPin,
 } from "../lib/plex-client";
 import { QuestStore } from "../store/quest-store";
@@ -65,6 +67,77 @@ describe("resumable Plex authentication", () => {
     expect(
       window.sessionStorage.getItem("plex-rating-quest-diagnostics"),
     ).not.toContain("private-token");
+  });
+
+  it("orders remote, local, and relay server connections as fallbacks", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify([
+            {
+              name: "Living Room",
+              provides: "server",
+              accessToken: "server-token",
+              connections: [
+                { uri: "https://local.example", local: true, relay: false },
+                { uri: "https://relay.example", local: false, relay: true },
+                { uri: "https://remote.example", local: false, relay: false },
+              ],
+            },
+          ]),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    await expect(fetchPlexServers("account-token")).resolves.toEqual([
+      expect.objectContaining({
+        uri: "https://remote.example",
+        connectionUris: [
+          "https://remote.example",
+          "https://local.example",
+          "https://relay.example",
+        ],
+      }),
+    ]);
+  });
+
+  it("falls back to the next Plex connection when the first is unreachable", async () => {
+    const request = vi
+      .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            MediaContainer: {
+              Directory: [{ key: "1", title: "Shows", type: "show" }],
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", request);
+
+    const resolved = await resolvePlexServer({
+      name: "Living Room",
+      uri: "https://remote.example",
+      connectionUris: ["https://remote.example", "https://local.example"],
+      accessToken: "server-token",
+    });
+
+    expect(resolved.server.uri).toBe("https://local.example");
+    expect(resolved.libraries).toEqual([
+      { id: "1", title: "Shows", type: "show" },
+    ]);
+    expect(request.mock.calls[0]?.[0]).toBe(
+      "https://remote.example/library/sections",
+    );
+    expect(request.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(request.mock.calls[1]?.[0]).toBe(
+      "https://local.example/library/sections",
+    );
+    expect(request.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("loads account-wide history and aggregates episodes into shows", async () => {

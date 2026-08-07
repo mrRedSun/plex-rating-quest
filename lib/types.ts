@@ -60,6 +60,7 @@ export type TierAssignments = Readonly<Record<string, TierId>>;
 export interface PlexServer {
   readonly name: string;
   readonly uri: string;
+  readonly connectionUris?: readonly string[];
   readonly accessToken: string;
 }
 
