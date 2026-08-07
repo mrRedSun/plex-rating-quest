@@ -20,7 +20,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "incremental": true,
     "paths": {
       "@/*": ["./*"]
@@ -30,6 +30,7 @@
     "app/**/*.ts",
     "app/**/*.tsx",
     "lib/**/*.ts",
+    "server/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "store/**/*.ts",

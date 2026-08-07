@@ -1,32 +1,36 @@
 # Plex Rating Quest
 
-Turn a large Plex library into a fast rating game. Connect through Plex, filter the titles you have watched, rate with keyboard or touch controls, review the batch, and decide when changes are sent to Plex.
+Plex Rating Quest turns your Plex watch history into a fast rating game, ratings dashboard, and exportable show tier list. It supports English and Ukrainian, touch and keyboard controls, review-before-write rating batches, Markdown exports for recommendation agents, and privacy-safe diagnostics.
 
-## Features
+## Privacy model
 
-- Official Plex PIN sign-in
-- Movie and show library discovery
-- Watched, unrated, movie, show, year, genre, library, and play-count filters
-- Keyboard-first rating with a resumable local queue
-- Review and confirmation before Plex is updated
-- Watched-show tier lists with persistent S–D rankings
-- Privacy-safe PNG and AI-ready Markdown tier-list exports
-- Privacy-safe downloadable diagnostics
-- Responsive interface with reduced-motion support
-- Persisted English and Ukrainian interface localization
-- Self-hosted, pull-only Docker Compose deployment
+The application is self-hosted but no longer browser-only. Its container serves the interface and acts as a narrow Plex gateway:
 
-The app is browser-only. The container serves static files and never receives or stores Plex credentials.
+- Plex PIN authorization and Plex API requests are handled by the container.
+- Plex account and server tokens are never returned to browser JavaScript or placed in artwork URLs.
+- The browser receives a random `Secure`, `HttpOnly`, `SameSite=Lax` session cookie.
+- Session records are AES-256-GCM encrypted in the `plex-rating-quest-data` Docker volume.
+- The Compose-mounted `secrets/session_secret` file is the encryption key material. Losing it invalidates stored sessions; exposing it compromises them.
+- Ratings are sent to Plex only after the user confirms the batch.
+- Quest progress, filters, viewing titles/dates, ratings, and tier lists remain only in the current tab's session storage and are cleared when the tab session ends or logout succeeds.
+
+The container can reach Plex account services and the Plex server connections returned by Plex. Operators are responsible for protecting the host, volume, encryption secret, TLS reverse proxy, and network path.
+
+## Backend architecture
+
+The backend uses small native Node modules with explicit boundaries:
+
+- `api-router` owns the same-origin HTTP contract and authorization gates.
+- `plex-gateway` owns Plex protocol details, upstream timeouts, and token injection.
+- `session-repository` owns encrypted persistence and HttpOnly cookies.
+- `config`, `http`, `static-files`, and `logger` isolate runtime concerns.
+- `server` is only the composition root and graceful lifecycle.
+
+These boundaries allow the encrypted file repository to be replaced by another storage adapter, or new Plex capabilities to be added, without changing browser authentication or deployment shape.
 
 ## Install with Docker Compose
 
-Requirements:
-
-- Docker Engine with Docker Compose v2
-- A GitHub token with `read:packages` for the private GHCR image
-- HTTPS with a stable hostname for reliable Plex authentication
-
-Clone the repository:
+Requirements: Docker Engine, Docker Compose v2, a stable HTTPS hostname, and access to the public GHCR image.
 
 ```bash
 git clone https://github.com/mrRedSun/plex-rating-quest.git
@@ -34,46 +38,43 @@ cd plex-rating-quest
 cp .env.example .env
 ```
 
-Sign in to GHCR interactively. Use your GitHub username and a token limited to `read:packages`:
+Generate the persistent session-encryption secret once as a protected Compose secret:
 
 ```bash
-docker login ghcr.io
+mkdir -p secrets
+chmod 700 secrets
+umask 077
+openssl rand -hex 32 > secrets/session_secret
 ```
 
-Pull and start the published image:
+Protect the file, pull the published image, and start it:
 
 ```bash
+chmod 600 .env secrets/session_secret
 docker compose pull
 docker compose up -d --remove-orphans
 docker compose ps
 curl --fail --show-error http://127.0.0.1:8080/healthz
 ```
 
-The health endpoint must return `ok`, and `docker compose ps` must show the service as healthy. Open `http://YOUR_SERVER:8080`, or expose it through your HTTPS reverse proxy.
+The health endpoint must return `ok` and Compose must report the service as healthy. Publish port 8080 only through an HTTPS reverse proxy. Preserve the original `Host` header and set `X-Forwarded-Host`; do not expose the app over plain HTTP because secure session cookies will not work.
 
-Deployment agents must use `docker compose pull`. Do not run `docker build` or `docker compose build` on the deployment host.
+Deployment agents must use the published image with `docker compose pull`. They must not build an image on the deployment host.
 
 ## Configuration
 
-To change the host port, edit `.env` before starting the service:
+| Variable                          | Required | Default                    | Purpose                                                                      |
+| --------------------------------- | -------- | -------------------------- | ---------------------------------------------------------------------------- |
+| `PLEX_RATING_SESSION_SECRET_FILE` | No       | `./secrets/session_secret` | Host path to the Compose-mounted encryption secret                           |
+| `PLEX_RATING_PORT`                | No       | `8080`                     | Host port bound to the application                                           |
+| `PLEX_RATING_PUBLIC_ORIGIN`       | Yes      | none                       | Exact public HTTPS origin used for CSRF validation                           |
+| `PLEX_ALLOWED_PRIVATE_HOSTS`      | No       | empty                      | Exact comma-separated Plex hosts allowed to resolve to private/LAN addresses |
 
-| Variable           | Default | Purpose                             |
-| ------------------ | ------- | ----------------------------------- |
-| `PLEX_RATING_PORT` | `8080`  | Host port mapped to the application |
+Never rotate `secrets/session_secret` as part of a routine upgrade. Back up the secret separately from the encrypted volume and restrict both to the deployment operator.
 
-The immutable application image is pinned directly in `compose.yaml`, which is the deployment source of truth.
+Private, loopback, link-local, multicast, and metadata destinations are denied by default. If the container must connect directly to a LAN Plex address, add only that exact IP address or hostname to `PLEX_ALLOWED_PRIVATE_HOSTS`; prefer Plex's remote or relay HTTPS connection when possible.
 
-## Operations
-
-View logs:
-
-```bash
-docker compose logs --tail=200 -f plex-rating-quest
-```
-
-Upgrade to a published version:
-
-Pull the latest repository changes, then pull and recreate the service. The updated repository supplies the approved image version in `compose.yaml`.
+## Upgrade and rollback
 
 ```bash
 git pull --ff-only
@@ -82,37 +83,37 @@ docker compose up -d --remove-orphans
 curl --fail --show-error http://127.0.0.1:8080/healthz
 ```
 
-Roll back by restoring the previous pinned `image:` value in `compose.yaml`, then run the same `docker compose pull` and `docker compose up -d --remove-orphans` commands.
+To roll back, restore the previous pinned `image:` value in `compose.yaml`, then repeat `docker compose pull` and `docker compose up -d --remove-orphans`. Do not delete the named volume. See [MIGRATION.md](MIGRATION.md) for the v2 static-container migration, exact backup procedure, verification, and rollback.
 
-Stop the application without deleting images or unrelated Docker data:
+Stop without deleting sessions:
 
 ```bash
 docker compose down
 ```
 
-The application has no Docker volumes. Quest progress is stored in each browser's local storage.
+View privacy-safe structured logs:
 
-## Plex sign-in
-
-- Serve the app through HTTPS with one stable hostname.
-- Allow pop-ups for that hostname.
-- The browser must reach `plex.tv`, `app.plex.tv`, and the selected Plex server.
-- Plex server certificates and browser CORS access must be valid.
-- Use the in-app **Diagnostics** download after a failure; tokens and server addresses are excluded.
+```bash
+docker compose logs --tail=200 -f plex-rating-quest
+```
 
 ## Development
 
-Requires Node.js 22.13 or newer:
+Requires Node.js 26.5.1 or newer:
 
 ```bash
 npm ci
-npm run dev
-```
-
-Run the complete local quality suite with:
-
-```bash
 npm run check
 ```
 
-GitHub Actions runs formatting, strict linting, type checking, tests, dependency audit, production bundling, image construction, and high/critical vulnerability scanning. Successful `main` runs publish the scanned image to GHCR with version, commit-SHA, and `main` tags.
+For interactive development, run the backend and Vite in separate terminals:
+
+```bash
+SESSION_SECRET="development-only-secret-at-least-32-characters" npm run dev:server
+```
+
+```bash
+npm run dev
+```
+
+GitHub Actions runs formatting, strict linting, type checking, tests, dependency auditing, the production build, container construction, and high/critical vulnerability scanning. Successful `main` builds publish version, commit-SHA, and `main` tags to GHCR.

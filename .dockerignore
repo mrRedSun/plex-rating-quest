@@ -5,9 +5,11 @@
 .wrangler
 coverage
 dist
+server-dist
 node_modules
 outputs
 work
+.data
 *.log
 *.tsbuildinfo
 .env*

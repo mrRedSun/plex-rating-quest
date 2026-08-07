@@ -69,6 +69,7 @@ export function DiagnosticsButton(): React.ReactElement {
 
 export const AccountControls = observer(
   function AccountControls(): React.ReactElement | null {
+    const [logoutError, setLogoutError] = useState(false);
     const accessToken = useQuestStore((state) => state.accessToken);
     const userName = useQuestStore((state) => state.userName);
     const serverName = useQuestStore(
@@ -85,12 +86,18 @@ export const AccountControls = observer(
         </span>
         <button
           type="button"
-          onClick={logout}
+          onClick={() => {
+            setLogoutError(false);
+            void logout().catch(() => setLogoutError(true));
+          }}
           aria-label={`Log out ${userName}`}
         >
           <LogOut aria-hidden="true" size={15} />
           <span>Log out</span>
         </button>
+        {logoutError ? (
+          <small role="alert">Logout failed. Please try again.</small>
+        ) : null}
       </div>
     );
   },

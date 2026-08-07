@@ -18,6 +18,8 @@ vi.mock("../lib/plex-client", async (importOriginal) => ({
   fetchPlexMedia: vi.fn(),
   fetchPlexServers: vi.fn(),
   resolvePlexServer: vi.fn(),
+  destroyPlexSession: vi.fn().mockResolvedValue(undefined),
+  restorePlexSession: vi.fn().mockResolvedValue(null),
 }));
 
 const SERVER: PlexServer = {
@@ -52,10 +54,10 @@ function authorize(): void {
 }
 
 describe("durable separated Plex flows", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
-    questStore.logout();
+    await questStore.logout();
     vi.clearAllMocks();
     vi.mocked(plexClient.resolvePlexServer).mockImplementation((server) =>
       Promise.resolve({
@@ -66,9 +68,9 @@ describe("durable separated Plex flows", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
-    questStore.logout();
+    await questStore.logout();
   });
 
   it("keeps authorization when a separate data pull fails", async () => {
@@ -110,13 +112,12 @@ describe("durable separated Plex flows", () => {
     expect(questStore.stage).toBe("mode");
   });
 
-  it("offers accessible logout and clears the durable authorization", () => {
+  it("offers accessible logout and clears the durable authorization", async () => {
     authorize();
     render(<PlexRatingQuest />);
 
     fireEvent.click(screen.getByRole("button", { name: "Log out movie-fan" }));
-
-    expect(questStore.accessToken).toBeNull();
+    await waitFor(() => expect(questStore.accessToken).toBeNull());
     expect(questStore.accountId).toBeNull();
     expect(
       screen.getByRole("button", { name: /continue with plex/i }),

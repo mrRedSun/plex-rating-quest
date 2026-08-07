@@ -1,6 +1,6 @@
 {
   "name": "plex-rating-quest",
-  "version": "2.0.10",
+  "version": "3.0.0",
   "private": true,
   "engines": {
     "node": ">=26.0.0"
@@ -10,14 +10,16 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build && npm run check:bundle",
+    "dev:server": "npm run build:server && PORT=8081 COOKIE_SECURE=false DATA_DIRECTORY=.data STATIC_DIRECTORY=dist node --watch server-dist/server.js",
+    "build": "vite build && npm run build:server && npm run check:bundle",
+    "build:server": "tsc --project tsconfig.server.json",
     "check:bundle": "node scripts/check-bundle.mjs",
-    "start": "vite preview --host 0.0.0.0",
+    "start": "node server-dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
-    "format:check": "prettier --check \"app/**/*.{ts,tsx,css}\" \"lib/**/*.ts\" \"src/**/*.{ts,tsx}\" \"store/**/*.ts\" \"tests/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"app/**/*.{ts,tsx,css}\" \"lib/**/*.ts\" \"server/**/*.ts\" \"src/**/*.{ts,tsx}\" \"store/**/*.ts\" \"tests/**/*.{ts,tsx}\"",
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
@@ -31,6 +33,7 @@
     "motion-utils": "12.39.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "undici": "8.10.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

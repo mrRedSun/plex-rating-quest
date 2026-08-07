@@ -38,6 +38,7 @@ import {
   fetchPlexServers,
   readPendingPlexPin,
   resolvePlexServer,
+  restorePlexSession,
   savePendingPlexPin,
   type PlexPin,
   waitForPlexToken,
@@ -118,6 +119,31 @@ function formatDate(value: string): string {
 
 async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value);
+}
+
+function useSessionRestoration(
+  token: string | null,
+  setPlexAuth: (auth: {
+    readonly token: string;
+    readonly accountId: string;
+    readonly accountName: string;
+  }) => void,
+): void {
+  useEffect(() => {
+    if (token !== null) return;
+    let active = true;
+    void restorePlexSession().then((account) => {
+      if (active && account !== null)
+        setPlexAuth({
+          token: "server-session",
+          accountId: account.id,
+          accountName: account.displayName,
+        });
+    });
+    return () => {
+      active = false;
+    };
+  }, [setPlexAuth, token]);
 }
 
 const Welcome = observer(function Welcome(): React.ReactElement {
@@ -252,6 +278,8 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     [accountId, choices, finishConnection, token],
   );
 
+  useSessionRestoration(token, setPlexAuth);
+
   useEffect(() => {
     const pendingPin = readPendingPlexPin();
     if (pendingPin === null) return;
@@ -271,7 +299,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
       <header className="topbar">
         <Brand />
         <div className="privacy-pill">
-          <LockKeyhole size={14} /> Browser-only · no server
+          <LockKeyhole size={14} /> Protected session · self-hosted
         </div>
       </header>
       <section className="welcome-grid">
@@ -291,6 +319,12 @@ const Welcome = observer(function Welcome(): React.ReactElement {
           <p className="lede">
             Turn a mountain of watched titles into a fast, cinematic rating
             game. Nothing reaches Plex until you say so.
+          </p>
+          <p className="security-note">
+            Your self-hosted container connects to Plex for you. Plex tokens are
+            encrypted in its persistent volume and never exposed to browser
+            JavaScript. Your browser receives only a secure, HttpOnly session
+            cookie; logging out deletes the server-side session.
           </p>
           <div className="welcome-actions">
             {token === null ? (

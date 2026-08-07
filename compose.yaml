@@ -1,11 +1,19 @@
 services:
   plex-rating-quest:
-    image: ghcr.io/mrredsun/plex-rating-quest:v2.0.2
+    image: ghcr.io/mrredsun/plex-rating-quest:v3.0.0
     pull_policy: always
     container_name: plex-rating-quest
     restart: unless-stopped
     ports:
-      - "${PLEX_RATING_PORT:-8080}:8080"
+      - "127.0.0.1:${PLEX_RATING_PORT:-8080}:8080"
+    environment:
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      PUBLIC_ORIGIN: "${PLEX_RATING_PUBLIC_ORIGIN:?Set the public HTTPS origin in .env}"
+      PLEX_ALLOWED_PRIVATE_HOSTS: "${PLEX_ALLOWED_PRIVATE_HOSTS:-}"
+    secrets:
+      - session_secret
+    volumes:
+      - plex-rating-data:/data
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -14,7 +22,7 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 100
-    mem_limit: 128m
+    mem_limit: 256m
     cpus: 0.50
     healthcheck:
       test:
@@ -23,3 +31,11 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+
+volumes:
+  plex-rating-data:
+    name: plex-rating-quest-data
+
+secrets:
+  session_secret:
+    file: "${PLEX_RATING_SESSION_SECRET_FILE:-./secrets/session_secret}"

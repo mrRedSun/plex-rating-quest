@@ -2,7 +2,8 @@
 
 import { autorun, makeAutoObservable, runInAction } from "mobx";
 import { DEMO_MEDIA } from "../lib/demo-data";
-import { clearDiagnostics, logEvent } from "../lib/diagnostics";
+import { clearDiagnostics, logError, logEvent } from "../lib/diagnostics";
+import { destroyPlexSession } from "../lib/plex-client";
 import { DEFAULT_FILTERS, filterMedia } from "../lib/quest";
 import type {
   MediaItem,
@@ -45,14 +46,36 @@ function stripArtwork(items: readonly MediaItem[]): readonly MediaItem[] {
 
 function readPersistedState(): Partial<PersistedQuestState> {
   try {
-    const serialized = localStorage.getItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    const serialized = sessionStorage.getItem(STORAGE_KEY);
     return serialized === null
       ? {}
       : (JSON.parse(serialized) as Partial<PersistedQuestState>);
   } catch {
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
     return {};
   }
+}
+
+function migratePersistedState(
+  persisted: Partial<PersistedQuestState>,
+): Partial<PersistedQuestState> {
+  if (
+    persisted.accessToken === undefined ||
+    persisted.accessToken === null ||
+    persisted.accessToken === "server-session"
+  )
+    return persisted;
+  logEvent("auth.legacy_token.removed", {}, "warn");
+  return {
+    ...persisted,
+    stage: "welcome",
+    userName: "Explorer",
+    accountId: null,
+    accessToken: null,
+    servers: [],
+    selectedServer: null,
+  };
 }
 
 export class QuestStore {
@@ -78,7 +101,7 @@ export class QuestStore {
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
     if (typeof window !== "undefined")
-      Object.assign(this, readPersistedState());
+      Object.assign(this, migratePersistedState(readPersistedState()));
   }
 
   startPersistence(): () => void {
@@ -103,7 +126,7 @@ export class QuestStore {
         isPaused: this.isPaused,
         tierAssignments: this.tierAssignments,
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     });
   }
 
@@ -305,15 +328,24 @@ export class QuestStore {
     this.resetQuestState();
   }
 
-  logout(): void {
+  async logout(): Promise<void> {
     logEvent("auth.logout");
-    this.resetQuestState();
-    this.accountId = null;
-    this.accessToken = null;
-    this.userName = "Explorer";
-    this.servers = [];
-    this.selectedServer = null;
-    localStorage.removeItem("plex-rating-quest-pending-pin");
+    try {
+      if (this.accessToken !== null) await destroyPlexSession();
+    } catch (reason) {
+      logError("auth.logout.failed", reason);
+      throw reason;
+    }
+    runInAction(() => {
+      this.resetQuestState();
+      this.accountId = null;
+      this.accessToken = null;
+      this.userName = "Explorer";
+      this.servers = [];
+      this.selectedServer = null;
+      localStorage.removeItem("plex-rating-quest-pending-pin");
+      sessionStorage.removeItem(STORAGE_KEY);
+    });
   }
 
   private resetQuestState(): void {
