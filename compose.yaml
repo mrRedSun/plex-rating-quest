@@ -1,6 +1,6 @@
 services:
   plex-rating-quest:
-    image: ghcr.io/mrredsun/plex-rating-quest:v3.0.0
+    image: ghcr.io/mrredsun/plex-rating-quest:v4.0.0
     pull_policy: always
     container_name: plex-rating-quest
     restart: unless-stopped
@@ -10,6 +10,7 @@ services:
       SESSION_SECRET_FILE: /run/secrets/session_secret
       PUBLIC_ORIGIN: "${PLEX_RATING_PUBLIC_ORIGIN:?Set the public HTTPS origin in .env}"
       PLEX_ALLOWED_PRIVATE_HOSTS: "${PLEX_ALLOWED_PRIVATE_HOSTS:-}"
+      LOG_LEVEL: "${PLEX_RATING_LOG_LEVEL:-info}"
     secrets:
       - session_secret
     volumes:

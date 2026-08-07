@@ -4,13 +4,23 @@ import { join } from "node:path";
 export interface AppConfig {
   readonly port: number;
   readonly dataDirectory: string;
-  readonly sessionFile: string;
+  readonly databaseFile: string;
   readonly sessionSecret: string;
   readonly cookieSecure: boolean;
   readonly staticDirectory: string;
   readonly appVersion: string;
+  readonly logLevel: "debug" | "info" | "warn" | "error";
   readonly publicOrigin: string;
   readonly allowedPrivatePlexHosts: ReadonlySet<string>;
+}
+
+function validatedLogLevel(
+  value: string | undefined,
+): "debug" | "info" | "warn" | "error" {
+  const level = value ?? "info";
+  if (!["debug", "info", "warn", "error"].includes(level))
+    throw new Error("LOG_LEVEL must be debug, info, warn, or error");
+  return level as "debug" | "info" | "warn" | "error";
 }
 
 function validatedPort(value: string | undefined): number {
@@ -46,11 +56,12 @@ export function loadConfig(
   return {
     port,
     dataDirectory,
-    sessionFile: join(dataDirectory, "sessions.enc"),
+    databaseFile: join(dataDirectory, "sessions.sqlite"),
     sessionSecret,
     cookieSecure: environment.COOKIE_SECURE !== "false",
     staticDirectory: environment.STATIC_DIRECTORY ?? "/app/dist",
     appVersion: environment.APP_VERSION ?? "development",
+    logLevel: validatedLogLevel(environment.LOG_LEVEL),
     publicOrigin,
     allowedPrivatePlexHosts: new Set(
       (environment.PLEX_ALLOWED_PRIVATE_HOSTS ?? "")

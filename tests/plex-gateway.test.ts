@@ -6,11 +6,12 @@ import type { SessionRecord } from "../server/domain";
 const CONFIG: AppConfig = {
   port: 8080,
   dataDirectory: "/tmp/test",
-  sessionFile: "/tmp/test/sessions.enc",
+  databaseFile: "/tmp/test/sessions.sqlite",
   sessionSecret: "test-secret-that-is-definitely-at-least-32-characters",
   cookieSecure: true,
   staticDirectory: "/tmp/static",
   appVersion: "test",
+  logLevel: "error",
   publicOrigin: "https://quest.example",
   allowedPrivatePlexHosts: new Set(),
 };

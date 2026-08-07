@@ -1,5 +1,3 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-
 export interface PendingPin {
   readonly id: number;
   readonly code: string;
@@ -20,17 +18,9 @@ export interface SessionRecord {
   servers: Record<string, readonly ServerConnection[]>;
 }
 
-export type SessionStore = Record<string, SessionRecord>;
-
 export interface SessionContext {
   readonly id: string;
   readonly record: SessionRecord;
-}
-
-export interface RequestContext {
-  readonly request: IncomingMessage;
-  readonly response: ServerResponse;
-  readonly url: URL;
 }
 
 export interface PlexPinResponse {
