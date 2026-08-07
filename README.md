@@ -16,6 +16,18 @@ The application is self-hosted but no longer browser-only. Its container serves 
 
 The container can reach Plex account services and the Plex server connections returned by Plex. Operators are responsible for protecting the host, volume, encryption secret, TLS reverse proxy, and network path.
 
+## Backend architecture
+
+The backend uses small native Node modules with explicit boundaries:
+
+- `api-router` owns the same-origin HTTP contract and authorization gates.
+- `plex-gateway` owns Plex protocol details, upstream timeouts, and token injection.
+- `session-repository` owns encrypted persistence and HttpOnly cookies.
+- `config`, `http`, `static-files`, and `logger` isolate runtime concerns.
+- `server` is only the composition root and graceful lifecycle.
+
+These boundaries allow the encrypted file repository to be replaced by another storage adapter, or new Plex capabilities to be added, without changing browser authentication or deployment shape.
+
 ## Install with Docker Compose
 
 Requirements: Docker Engine, Docker Compose v2, a stable HTTPS hostname, and access to the public GHCR image.

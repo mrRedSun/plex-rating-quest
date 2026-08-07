@@ -23,6 +23,8 @@ ENV NODE_ENV=production \
 WORKDIR /app
 RUN addgroup -S -g 10001 quest && adduser -S -D -H -u 10001 -G quest quest \
     && mkdir -p /app/dist /data \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
     && chown -R quest:quest /app /data
 COPY --from=build --chown=quest:quest /app/dist ./dist
 COPY --from=build --chown=quest:quest /app/server-dist ./server-dist

@@ -2,10 +2,20 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 const children: ChildProcess[] = [];
 const directories: string[] = [];
+
+beforeAll(() => {
+  const result = spawnSync(
+    process.execPath,
+    ["node_modules/typescript/bin/tsc", "--project", "tsconfig.server.json"],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+  if (result.status !== 0)
+    throw new Error(`Server compilation failed: ${result.stderr}`);
+});
 
 afterEach(async () => {
   for (const child of children.splice(0)) child.kill("SIGTERM");
@@ -32,15 +42,11 @@ async function waitForHealth(origin: string): Promise<Response> {
 
 describe("protected backend runtime", () => {
   it("fails closed without a sufficiently strong session secret", () => {
-    const result = spawnSync(
-      process.execPath,
-      ["--experimental-strip-types", "server/server.ts"],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-        env: { ...process.env, SESSION_SECRET: "short" },
-      },
-    );
+    const result = spawnSync(process.execPath, ["server-dist/server.js"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, SESSION_SECRET: "short" },
+    });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
       "SESSION_SECRET must contain at least 32 characters",
@@ -52,22 +58,17 @@ describe("protected backend runtime", () => {
     directories.push(directory);
     const port = 20_000 + Math.floor(Math.random() * 10_000);
     const origin = `http://127.0.0.1:${port}`;
-    const child = spawn(
-      process.execPath,
-      ["--experimental-strip-types", "server/server.ts"],
-      {
-        cwd: process.cwd(),
-        env: {
-          ...process.env,
-          DATA_DIRECTORY: directory,
-          PORT: String(port),
-          SESSION_SECRET:
-            "runtime-test-secret-that-is-longer-than-32-characters",
-          STATIC_DIRECTORY: join(process.cwd(), "public"),
-        },
-        stdio: "ignore",
+    const child = spawn(process.execPath, ["server-dist/server.js"], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DATA_DIRECTORY: directory,
+        PORT: String(port),
+        SESSION_SECRET: "runtime-test-secret-that-is-longer-than-32-characters",
+        STATIC_DIRECTORY: join(process.cwd(), "public"),
       },
-    );
+      stdio: "ignore",
+    });
     children.push(child);
 
     const health = await waitForHealth(origin);

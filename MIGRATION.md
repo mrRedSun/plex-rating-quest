@@ -2,7 +2,7 @@
 
 ## Objective
 
-Upgrade an existing Plex Rating Quest deployment to the published v3 container. V3 adds a backend, an encrypted persistent session store, an HttpOnly cookie, and a Docker volume. Existing browser-side Plex tokens are not imported; every user must sign in to Plex once after migration.
+Replace an existing Plex Rating Quest deployment with the published v3 container. This is a clean cutover, not an application-data migration. V3 adds a backend, an encrypted persistent session store, an HttpOnly cookie, and a Docker volume. Existing browser-side Plex tokens are deliberately discarded; sign in to Plex once after deployment.
 
 Do not build the container. Do not delete Docker volumes, unrelated containers, Git history, or the existing `.env` backup.
 
