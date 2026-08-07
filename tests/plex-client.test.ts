@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearPendingPlexPin,
+  createPlexPin,
   fetchPlexAccount,
   fetchPlexMedia,
   fetchPlexServers,
@@ -9,6 +10,26 @@ import {
   savePendingPlexPin,
 } from "../lib/plex-client";
 import { QuestStore } from "../store/quest-store";
+
+describe("Plex PIN creation", () => {
+  it("does not declare a media type for an empty body", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ id: 42, code: "private-pin" })),
+      );
+    vi.stubGlobal("fetch", request);
+
+    await expect(createPlexPin()).resolves.toEqual({
+      id: 42,
+      code: "private-pin",
+    });
+    const init = request.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBeUndefined();
+    expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
+  });
+});
 
 describe("resumable Plex authentication", () => {
   beforeEach(() => {

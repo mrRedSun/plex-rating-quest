@@ -268,11 +268,9 @@ async function checkedFetch(
 
 export async function createPlexPin(): Promise<PlexPin> {
   logEvent("auth.pin.create.started");
-  const requestHeaders = new Headers(headers());
-  requestHeaders.set("Content-Type", "application/x-www-form-urlencoded");
   const response = await checkedFetch("pin.create", PIN_ENDPOINT, {
     method: "POST",
-    headers: requestHeaders,
+    headers: headers(),
   });
   const pin = pinSchema.parse(await response.json());
   logEvent("auth.pin.create.completed");
