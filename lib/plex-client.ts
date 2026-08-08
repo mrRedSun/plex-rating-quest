@@ -282,7 +282,7 @@ export async function createPlexPin(): Promise<PlexPin> {
 }
 
 export function buildPlexAuthUrl(pin: PlexPin): string {
-  logEvent("auth.window.prepared");
+  logEvent("auth.redirect.prepared");
   const parameters = new URLSearchParams({
     clientID: pin.clientId ?? getClientId(),
     code: pin.code,
@@ -290,6 +290,10 @@ export function buildPlexAuthUrl(pin: PlexPin): string {
     "context[device][product]": PRODUCT,
   });
   return `https://app.plex.tv/auth#?${parameters.toString()}`;
+}
+
+export function redirectToPlexAuth(pin: PlexPin): void {
+  window.location.assign(buildPlexAuthUrl(pin));
 }
 
 export async function waitForPlexToken(

@@ -29,7 +29,6 @@ import { observer } from "mobx-react-lite";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyPlexRating,
-  buildPlexAuthUrl,
   clearPendingPlexPin,
   createPlexPin,
   fetchPlexAccount,
@@ -37,6 +36,7 @@ import {
   fetchPlexMedia,
   fetchPlexServers,
   readPendingPlexPin,
+  redirectToPlexAuth,
   resolvePlexServer,
   restorePlexSession,
   savePendingPlexPin,
@@ -210,29 +210,14 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     logEvent("auth.connection.started");
     setError(null);
     setStatus("authenticating");
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const popup = window.open(
-      "about:blank",
-      "plex-auth",
-      "popup,width=720,height=760",
-    );
     try {
-      if (popup === null)
-        throw new Error(
-          "Your browser blocked the Plex sign-in window. Allow pop-ups for this site and try again.",
-        );
-      popup.document.title = "Connecting to Plex…";
       const pin = await createPlexPin();
       savePendingPlexPin(pin);
-      popup.location.href = buildPlexAuthUrl(pin);
-      await finishPin(pin, controller);
-      popup.close();
+      redirectToPlexAuth(pin);
     } catch (reason) {
-      popup?.close();
       handleConnectionFailure(reason);
     }
-  }, [finishPin, handleConnectionFailure]);
+  }, [handleConnectionFailure]);
 
   const pullData = useCallback(async (): Promise<void> => {
     if (token === null || accountId === null) return;

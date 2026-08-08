@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.0.3 - 2026-08-08
+
+### Changed
+
+- Run Plex authorization in the current browser tab and resume the quest after Plex redirects back.
+
 ## 4.0.2 - 2026-08-08
 
 ### Fixed
