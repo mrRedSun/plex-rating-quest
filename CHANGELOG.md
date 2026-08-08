@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.0.4 - 2026-08-08
+
+### Added
+
+- Show a full-screen, accessible progress experience while restoring authentication or loading Plex data.
+- Allow users to cancel in-flight Plex work without losing their authenticated account state.
+
 ## 4.0.3 - 2026-08-08
 
 ### Changed

@@ -322,10 +322,14 @@ export async function waitForPlexToken(
   throw new DOMException("Plex sign-in was cancelled", "AbortError");
 }
 
-export async function fetchPlexServers(token: string): Promise<PlexServer[]> {
+export async function fetchPlexServers(
+  token: string,
+  signal?: AbortSignal,
+): Promise<PlexServer[]> {
   logEvent("plex.discovery.started");
   const response = await checkedFetch("server.discovery", RESOURCE_ENDPOINT, {
     headers: headers(token),
+    ...(signal === undefined ? {} : { signal }),
   });
   const resources = resourceSchema.parse(await response.json());
   const servers = resources.flatMap((resource) => {
@@ -361,10 +365,14 @@ export async function fetchPlexServers(token: string): Promise<PlexServer[]> {
   return servers;
 }
 
-export async function fetchPlexAccount(token: string): Promise<PlexAccount> {
+export async function fetchPlexAccount(
+  token: string,
+  signal?: AbortSignal,
+): Promise<PlexAccount> {
   logEvent("plex.account.started");
   const response = await checkedFetch("account.fetch", USER_ENDPOINT, {
     headers: headers(token),
+    ...(signal === undefined ? {} : { signal }),
   });
   const account = userSchema.parse(await response.json());
   const username = account.username?.trim();
@@ -433,6 +441,7 @@ async function fetchHistoryPage(
   token: string,
   accountId: string,
   after: string | null,
+  signal?: AbortSignal,
 ): Promise<z.infer<typeof historyResponseSchema>> {
   const requestHeaders = new Headers(headers(token));
   requestHeaders.set("Content-Type", "application/json");
@@ -446,6 +455,7 @@ async function fetchHistoryPage(
         query: WATCH_HISTORY_QUERY,
         variables: { uuid: accountId, first: 100, after },
       }),
+      ...(signal === undefined ? {} : { signal }),
     },
   );
   return historyResponseSchema.parse(await response.json());
@@ -455,6 +465,7 @@ async function fetchRatingsPage(
   token: string,
   accountId: string,
   after: string | null,
+  signal?: AbortSignal,
 ): Promise<z.infer<typeof ratingsResponseSchema>> {
   const requestHeaders = new Headers(headers(token));
   requestHeaders.set("Content-Type", "application/json");
@@ -468,6 +479,7 @@ async function fetchRatingsPage(
         query: RATINGS_QUERY,
         variables: { uuid: accountId, first: 100, after },
       }),
+      ...(signal === undefined ? {} : { signal }),
     },
   );
   return ratingsResponseSchema.parse(await response.json());
@@ -506,6 +518,7 @@ function groupHistoryNodes(nodes: readonly HistoryNode[]): MediaItem[] {
 async function fetchPlexWatchHistory(
   token: string,
   accountId: string,
+  signal?: AbortSignal,
 ): Promise<MediaItem[]> {
   logEvent("plex.history.started");
   const nodes: HistoryNode[] = [];
@@ -513,7 +526,7 @@ async function fetchPlexWatchHistory(
   let page = 0;
   do {
     page += 1;
-    const parsed = await fetchHistoryPage(token, accountId, after);
+    const parsed = await fetchHistoryPage(token, accountId, after, signal);
     const error = parsed.errors?.[0];
     if (error !== undefined)
       throw new Error(`Plex history failed: ${error.message}`);
@@ -546,6 +559,7 @@ interface AccountRating {
 async function fetchPlexRatings(
   token: string,
   accountId: string,
+  signal?: AbortSignal,
 ): Promise<AccountRating[]> {
   logEvent("plex.ratings.started");
   const ratings: AccountRating[] = [];
@@ -553,7 +567,7 @@ async function fetchPlexRatings(
   let pageCount = 0;
   do {
     pageCount += 1;
-    const parsed = await fetchRatingsPage(token, accountId, after);
+    const parsed = await fetchRatingsPage(token, accountId, after, signal);
     const error = parsed.errors?.[0];
     if (error !== undefined)
       throw new Error(`Plex ratings failed: ${error.message}`);
@@ -604,6 +618,7 @@ export async function fetchPlexLibraries(
 
 export async function resolvePlexServer(
   server: PlexServer,
+  signal?: AbortSignal,
 ): Promise<{ readonly server: PlexServer; readonly libraries: PlexLibrary[] }> {
   const connectionUris = server.connectionUris ?? [server.uri];
   let lastError: unknown = new Error("Plex server has no usable connections");
@@ -616,7 +631,9 @@ export async function resolvePlexServer(
     try {
       const libraries = await fetchPlexLibraries(
         candidate,
-        AbortSignal.timeout(6000),
+        signal === undefined
+          ? AbortSignal.timeout(6000)
+          : AbortSignal.any([signal, AbortSignal.timeout(6000)]),
       );
       logEvent("plex.connection.selected", {
         attempt: index + 1,
@@ -624,6 +641,7 @@ export async function resolvePlexServer(
       });
       return { server: candidate, libraries };
     } catch (reason) {
+      if (signal?.aborted === true) throw reason;
       lastError = reason;
       logError("plex.connection.rejected", reason, { attempt: index + 1 });
     }
@@ -638,6 +656,7 @@ export async function fetchPlexMedia(
   server: PlexServer,
   libraries: readonly PlexLibrary[],
   account?: { readonly id: string; readonly token: string },
+  signal?: AbortSignal,
 ): Promise<MediaItem[]> {
   logEvent("plex.media.started", { libraryCount: libraries.length });
   const results = await Promise.all(
@@ -645,7 +664,10 @@ export async function fetchPlexMedia(
       const response = await checkedFetch(
         "library.media.fetch",
         `${server.uri}/library/sections/${library.id}/all`,
-        { headers: headers(server.accessToken) },
+        {
+          headers: headers(server.accessToken),
+          ...(signal === undefined ? {} : { signal }),
+        },
       );
       const parsed = mediaSchema.parse(await response.json());
       return parsed.MediaContainer.Metadata.map((item): MediaItem => ({
@@ -676,8 +698,8 @@ export async function fetchPlexMedia(
     return libraryMedia;
   }
   const [historyMedia, accountRatings] = await Promise.all([
-    fetchPlexWatchHistory(account.token, account.id),
-    fetchPlexRatings(account.token, account.id),
+    fetchPlexWatchHistory(account.token, account.id, signal),
+    fetchPlexRatings(account.token, account.id, signal),
   ]);
   const normalize = (value: string): string =>
     value.toLocaleLowerCase().replaceAll(/[^a-z0-9]/g, "");
