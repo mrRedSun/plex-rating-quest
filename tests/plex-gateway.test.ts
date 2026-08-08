@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PlexGateway } from "../server/plex-gateway";
+import { createPinnedLookup, PlexGateway } from "../server/plex-gateway";
 import type { AppConfig } from "../server/config";
 import type { SessionRecord } from "../server/domain";
 
@@ -28,6 +28,22 @@ function record(uri = "https://plex.example:32400"): SessionRecord {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe("pinned DNS lookup", () => {
+  it("returns an address array when Undici requests all addresses", async () => {
+    const lookup = createPinnedLookup(() =>
+      Promise.resolve({ address: "203.0.113.10", family: 4 }),
+    );
+
+    await expect(
+      new Promise((resolve, reject) =>
+        lookup("plex.tv", { all: true }, (error, addresses) =>
+          error === null ? resolve(addresses) : reject(error),
+        ),
+      ),
+    ).resolves.toEqual([{ address: "203.0.113.10", family: 4 }]);
+  });
+});
 
 describe("Plex gateway trust boundaries", () => {
   it.each([

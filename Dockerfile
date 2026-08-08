@@ -21,7 +21,9 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 FROM node:26.5.1-alpine3.23@sha256:2a633e101381371ba148c7c212bf447c00cd267d814b708a9fe52c4984204729 AS runtime
+ARG APP_VERSION=development
 ENV NODE_ENV=production \
+    APP_VERSION=${APP_VERSION} \
     PORT=8080 \
     DATA_DIRECTORY=/data \
     STATIC_DIRECTORY=/app/dist
