@@ -7,18 +7,26 @@ import { LanguageControl } from "./Localization";
 
 export { LanguageControl };
 
-export const Brand = observer(function Brand(): React.ReactElement {
+export const Brand = observer(function Brand({
+  nativeNavigation = false,
+}: {
+  readonly nativeNavigation?: boolean;
+}): React.ReactElement {
   const hasLoadedData = useQuestStore((state) => state.media.length > 0);
   const setStage = useQuestStore((state) => state.setStage);
-  const destination = hasLoadedData ? "/quests" : "/";
+  const destination = nativeNavigation ? "/" : hasLoadedData ? "/quests" : "/";
   return (
     <a
       className="brand"
       href={destination}
-      onClick={(event) => {
-        event.preventDefault();
-        setStage(hasLoadedData ? "mode" : "welcome");
-      }}
+      onClick={
+        nativeNavigation
+          ? undefined
+          : (event) => {
+              event.preventDefault();
+              setStage(hasLoadedData ? "mode" : "welcome");
+            }
+      }
       aria-label="Plex Rating Quest home"
     >
       <span className="brand-mark">
@@ -119,6 +127,10 @@ export function Shell({
       <div className="aurora aurora-two" />
       {children}
       <footer className="shell-utilities">
+        <nav className="legal-links" aria-label="Legal">
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </nav>
         {showAccountControls ? <AccountControls /> : null}
         <LanguageControl />
         <DiagnosticsButton />

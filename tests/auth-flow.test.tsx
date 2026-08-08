@@ -106,6 +106,32 @@ describe("durable separated Plex flows", () => {
     ).toBeInTheDocument();
   });
 
+  it("links legal notices from the application shell", () => {
+    render(<PlexRatingQuest />);
+
+    expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute(
+      "href",
+      "/privacy",
+    );
+    expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute(
+      "href",
+      "/terms",
+    );
+  });
+
+  it("renders the privacy notice at its stable route", () => {
+    window.history.replaceState({}, "", "/privacy");
+    render(<PlexRatingQuest />);
+
+    expect(
+      screen.getByRole("heading", { name: "Privacy & data handling" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("supremumsoftteam@gmail.com")).toHaveAttribute(
+      "href",
+      "mailto:supremumsoftteam@gmail.com",
+    );
+  });
+
   it("shows the connected account and data action above the hero", () => {
     authorize();
     render(<PlexRatingQuest />);

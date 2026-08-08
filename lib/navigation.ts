@@ -14,6 +14,14 @@ const STAGE_PATHS: Readonly<Record<QuestStage, string>> = {
 
 export const HISTORY_STAGE_KEY = "plexRatingQuestStage";
 
+export function legalPageFromPath(
+  pathname: string,
+): "privacy" | "terms" | null {
+  if (pathname === "/privacy") return "privacy";
+  if (pathname === "/terms") return "terms";
+  return null;
+}
+
 export function pathForStage(stage: QuestStage): string {
   return STAGE_PATHS[stage];
 }
