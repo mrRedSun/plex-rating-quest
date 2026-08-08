@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { isIP, type LookupFunction } from "node:net";
 import type { ServerResponse } from "node:http";
 import {
   Agent,
@@ -25,6 +25,31 @@ const NOOP_LOGGER: GatewayLogger = {
   info: () => undefined,
   warn: () => undefined,
 };
+
+interface ValidatedAddress {
+  readonly address: string;
+  readonly family: 4 | 6;
+}
+
+export function createPinnedLookup(
+  resolve: (hostname: string) => Promise<ValidatedAddress>,
+): LookupFunction {
+  return (hostname, options, callback) => {
+    void resolve(hostname)
+      .then(({ address, family }) =>
+        options.all === true
+          ? callback(null, [{ address, family }])
+          : callback(null, address, family),
+      )
+      .catch((reason: unknown) =>
+        callback(
+          reason instanceof Error ? reason : new Error("DNS lookup failed"),
+          options.all === true ? [] : "",
+          4,
+        ),
+      );
+  };
+}
 
 export const PLEX_ENDPOINTS = {
   pin: "https://plex.tv/api/v2/pins",
@@ -381,19 +406,9 @@ export class PlexGateway {
     if (existing !== undefined) return existing;
     const dispatcher = new Agent({
       connect: {
-        lookup: (hostname, _options, callback) => {
-          void this.#validatedLookup(hostname)
-            .then(({ address, family }) => callback(null, address, family))
-            .catch((reason: unknown) =>
-              callback(
-                reason instanceof Error
-                  ? reason
-                  : new Error("DNS lookup failed"),
-                "",
-                4,
-              ),
-            );
-        },
+        lookup: createPinnedLookup((hostname) =>
+          this.#validatedLookup(hostname),
+        ),
       },
     });
     this.#dispatchers.set(target.origin, dispatcher);
