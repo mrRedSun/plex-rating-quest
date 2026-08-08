@@ -97,6 +97,26 @@ describe("durable separated Plex flows", () => {
     });
   });
 
+  it("shows signed-out account state with its primary action first", () => {
+    render(<PlexRatingQuest />);
+
+    expect(screen.getByText("Plex not connected")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /continue with plex/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the connected account and data action above the hero", () => {
+    authorize();
+    render(<PlexRatingQuest />);
+
+    expect(screen.getByText("Connected to Plex")).toBeInTheDocument();
+    expect(screen.getByText("Welcome back, movie-fan")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /load my plex data/i }),
+    ).toBeInTheDocument();
+  });
+
   it("keeps authorization when a separate data pull fails", async () => {
     authorize();
     vi.mocked(plexClient.fetchPlexServers).mockRejectedValue(

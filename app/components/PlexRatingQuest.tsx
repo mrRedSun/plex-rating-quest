@@ -240,6 +240,72 @@ function ServerChooser({
   );
 }
 
+function HomeCommandCard({
+  connected,
+  userName,
+  status,
+  error,
+  onConnect,
+  onPullData,
+  onDemo,
+}: {
+  readonly connected: boolean;
+  readonly userName: string;
+  readonly status: WelcomeStatus;
+  readonly error: string | null;
+  readonly onConnect: () => void;
+  readonly onPullData: () => void;
+  readonly onDemo: () => void;
+}): React.ReactElement {
+  return (
+    <motion.aside
+      className="home-command-card"
+      aria-labelledby="home-command-title"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <div className={`connection-status ${connected ? "connected" : ""}`}>
+        <span aria-hidden="true" />
+        {connected ? "Connected to Plex" : "Plex not connected"}
+      </div>
+      <h2 id="home-command-title">
+        {connected ? `Welcome back, ${userName}` : "Bring your Plex library"}
+      </h2>
+      <p>
+        {connected
+          ? "Your account is ready. Load your private library to start a quest."
+          : "Use Plex PIN sign-in. Your credentials stay inside your self-hosted container."}
+      </p>
+      {connected ? <AccountControls /> : null}
+      <div className="home-command-actions">
+        <PrimaryButton
+          onClick={connected ? onPullData : onConnect}
+          disabled={status !== "idle"}
+        >
+          {connected ? "Load my Plex data" : "Continue with Plex"}
+          <ChevronRight size={18} />
+        </PrimaryButton>
+        <PrimaryButton variant="secondary" onClick={onDemo}>
+          Explore demo
+        </PrimaryButton>
+      </div>
+      {error === null ? null : (
+        <p className="error-message" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="home-command-trust">
+        <span>
+          <ShieldCheck size={15} /> Official PIN sign-in
+        </span>
+        <span>
+          <LockKeyhole size={15} /> Private session
+        </span>
+      </div>
+    </motion.aside>
+  );
+}
+
 const Welcome = observer(function Welcome(): React.ReactElement {
   const startDemo = useQuestStore((state) => state.startDemo);
   const [status, setStatus] = useState<WelcomeStatus>("idle");
@@ -249,6 +315,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
   const abortRef = useRef<AbortController | null>(null);
   const token = useQuestStore((state) => state.accessToken);
   const accountId = useQuestStore((state) => state.accountId);
+  const userName = useQuestStore((state) => state.userName);
   const setPlexAuth = useQuestStore((state) => state.setPlexAuth);
   const setPlexData = useQuestStore((state) => state.setPlexData);
 
@@ -416,7 +483,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
   }, [status]);
 
   return (
-    <Shell>
+    <Shell showAccountControls={false}>
       <header className="topbar">
         <Brand />
         <div className="privacy-pill">
@@ -424,6 +491,50 @@ const Welcome = observer(function Welcome(): React.ReactElement {
         </div>
       </header>
       <section className="welcome-grid">
+        <div className="welcome-side">
+          <HomeCommandCard
+            connected={token !== null}
+            userName={userName}
+            status={status}
+            error={error}
+            onConnect={() => void connect()}
+            onPullData={() => void pullData()}
+            onDemo={startDemo}
+          />
+          <motion.div
+            className="quest-preview"
+            initial={{ opacity: 0, scale: 0.96, rotate: 1 }}
+            animate={{ opacity: 1, scale: 1, rotate: -1 }}
+            transition={{ delay: 0.12 }}
+          >
+            <div className="preview-glow" />
+            <div className="preview-card">
+              <div className="poster-sample">
+                <span>
+                  THE
+                  <br />
+                  LAST
+                  <br />
+                  HORIZON
+                </span>
+                <small>2024</small>
+              </div>
+              <div className="preview-info">
+                <span className="micro-label">NOW RATING · 142 / 643</span>
+                <h2>The Last Horizon</h2>
+                <p>Sci-Fi · Drama · 2h 28m</p>
+                <div className="sample-stars">★★★★★</div>
+                <div className="progress-track">
+                  <span style={{ width: "63%" }} />
+                </div>
+                <div className="preview-meta">
+                  <span>🔥 27 streak</span>
+                  <span>63% complete</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
         <motion.div
           className="welcome-copy"
           initial={{ opacity: 0, y: 18 }}
@@ -447,52 +558,6 @@ const Welcome = observer(function Welcome(): React.ReactElement {
             JavaScript. Your browser receives only a secure, HttpOnly session
             cookie; logging out deletes the server-side session.
           </p>
-          <div className="welcome-actions">
-            {token === null ? (
-              <PrimaryButton
-                onClick={() => {
-                  void connect();
-                }}
-                disabled={status !== "idle"}
-              >
-                {status === "authenticating" ? (
-                  <>
-                    <LoaderCircle className="spin" size={18} /> Waiting for Plex
-                  </>
-                ) : (
-                  <>
-                    Continue with Plex <ChevronRight size={18} />
-                  </>
-                )}
-              </PrimaryButton>
-            ) : (
-              <PrimaryButton
-                onClick={() => {
-                  void pullData();
-                }}
-                disabled={status !== "idle"}
-              >
-                {status === "pulling" ? (
-                  <>
-                    <LoaderCircle className="spin" size={18} /> Loading Plex
-                    data
-                  </>
-                ) : (
-                  <>
-                    Load my Plex data <ChevronRight size={18} />
-                  </>
-                )}
-              </PrimaryButton>
-            )}
-            <PrimaryButton variant="secondary" onClick={startDemo}>
-              Explore demo
-            </PrimaryButton>
-          </div>
-          {error === null ? null : (
-            <p className="error-message" role="alert">
-              {error}
-            </p>
-          )}
           <div className="trust-row">
             <span>
               <ShieldCheck size={17} /> Official PIN sign-in
@@ -503,39 +568,6 @@ const Welcome = observer(function Welcome(): React.ReactElement {
             <span>
               <Check size={17} /> Local queue
             </span>
-          </div>
-        </motion.div>
-        <motion.div
-          className="quest-preview"
-          initial={{ opacity: 0, scale: 0.96, rotate: 1 }}
-          animate={{ opacity: 1, scale: 1, rotate: -1 }}
-          transition={{ delay: 0.12 }}
-        >
-          <div className="preview-glow" />
-          <div className="preview-card">
-            <div className="poster-sample">
-              <span>
-                THE
-                <br />
-                LAST
-                <br />
-                HORIZON
-              </span>
-              <small>2024</small>
-            </div>
-            <div className="preview-info">
-              <span className="micro-label">NOW RATING · 142 / 643</span>
-              <h2>The Last Horizon</h2>
-              <p>Sci-Fi · Drama · 2h 28m</p>
-              <div className="sample-stars">★★★★★</div>
-              <div className="progress-track">
-                <span style={{ width: "63%" }} />
-              </div>
-              <div className="preview-meta">
-                <span>🔥 27 streak</span>
-                <span>63% complete</span>
-              </div>
-            </div>
           </div>
         </motion.div>
       </section>

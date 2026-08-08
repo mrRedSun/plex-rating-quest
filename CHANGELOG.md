@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.0.5 - 2026-08-08
+
+### Changed
+
+- Put Plex connection status, account identity, logout, and the primary action in an above-the-fold home command card.
+- Prioritize the account card before marketing content on mobile screens.
+
 ## 4.0.4 - 2026-08-08
 
 ### Added

@@ -106,9 +106,11 @@ export const AccountControls = observer(
 export function Shell({
   children,
   compact = false,
+  showAccountControls = true,
 }: {
   readonly children: React.ReactNode;
   readonly compact?: boolean;
+  readonly showAccountControls?: boolean;
 }): React.ReactElement {
   return (
     <main className={`app-shell${compact ? " compact" : ""}`}>
@@ -117,7 +119,7 @@ export function Shell({
       <div className="aurora aurora-two" />
       {children}
       <footer className="shell-utilities">
-        <AccountControls />
+        {showAccountControls ? <AccountControls /> : null}
         <LanguageControl />
         <DiagnosticsButton />
       </footer>

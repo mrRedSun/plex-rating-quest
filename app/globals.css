@@ -209,12 +209,94 @@ select:focus-visible {
   margin: 0 auto;
   display: grid;
   grid-template-columns: 1.03fr 0.97fr;
+  grid-template-areas: "copy side";
   gap: clamp(50px, 8vw, 130px);
   align-items: center;
   padding-bottom: 8vh;
 }
 .welcome-copy {
+  grid-area: copy;
   max-width: 690px;
+}
+.welcome-side {
+  grid-area: side;
+  display: grid;
+  gap: 22px;
+  align-content: center;
+}
+.home-command-card {
+  position: relative;
+  z-index: 2;
+  padding: clamp(24px, 3vw, 38px);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 25px;
+  background: linear-gradient(
+    145deg,
+    rgba(32, 25, 35, 0.94),
+    rgba(18, 14, 21, 0.9)
+  );
+  box-shadow: 0 30px 85px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(24px);
+}
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.connection-status > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #817984;
+  box-shadow: 0 0 0 4px rgba(129, 121, 132, 0.12);
+}
+.connection-status.connected {
+  color: #9de8bc;
+}
+.connection-status.connected > span {
+  background: #5bd28b;
+  box-shadow: 0 0 0 4px rgba(91, 210, 139, 0.13);
+}
+.home-command-card h2 {
+  margin: 18px 0 10px;
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+.home-command-card > p:not(.error-message) {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.home-command-card .account-controls {
+  width: 100%;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding: 9px 10px 9px 13px;
+}
+.home-command-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 24px;
+}
+.home-command-trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 20px;
+  color: #817984;
+  font-size: 11px;
+}
+.home-command-trust span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .eyebrow {
   color: var(--amber-light);
@@ -496,6 +578,19 @@ select:focus-visible {
 }
 .quest-preview {
   position: relative;
+}
+.welcome-side .quest-preview {
+  width: 86%;
+  margin: -4px auto 0;
+}
+.welcome-side .preview-card {
+  border-radius: 22px;
+}
+.welcome-side .preview-info {
+  padding: clamp(16px, 2vw, 28px);
+}
+.welcome-side .sample-stars {
+  margin: 18px 0;
 }
 .preview-glow {
   position: absolute;
@@ -1616,7 +1711,14 @@ select:focus-visible {
   }
   .welcome-grid {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "side"
+      "copy";
     padding-top: 7vh;
+  }
+  .welcome-side {
+    width: min(620px, 100%);
+    margin: 0 auto;
   }
   .quest-preview {
     max-width: 620px;
@@ -1666,6 +1768,12 @@ select:focus-visible {
   .welcome-grid {
     min-height: calc(100svh - 75px);
     gap: 60px;
+  }
+  .welcome-side .quest-preview {
+    display: none;
+  }
+  .home-command-actions {
+    grid-template-columns: 1fr;
   }
   .welcome-actions {
     align-items: stretch;
