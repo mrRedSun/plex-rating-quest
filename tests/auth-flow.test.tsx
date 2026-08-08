@@ -18,6 +18,9 @@ vi.mock("../lib/plex-client", async (importOriginal) => ({
   fetchPlexMedia: vi.fn(),
   fetchPlexServers: vi.fn(),
   resolvePlexServer: vi.fn(),
+  createPlexPin: vi.fn(),
+  redirectToPlexAuth: vi.fn(),
+  waitForPlexToken: vi.fn(),
   destroyPlexSession: vi.fn().mockResolvedValue(undefined),
   restorePlexSession: vi.fn().mockResolvedValue(null),
 }));
@@ -71,6 +74,27 @@ describe("durable separated Plex flows", () => {
   afterEach(async () => {
     cleanup();
     await questStore.logout();
+  });
+
+  it("redirects the current tab to Plex and resumes after returning", async () => {
+    const pin = { id: 42, code: "private-pin", clientId: "client-id" };
+    vi.mocked(plexClient.createPlexPin).mockResolvedValue(pin);
+    const openPopup = vi.spyOn(window, "open");
+
+    render(<PlexRatingQuest />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /continue with plex/i }),
+    );
+
+    await waitFor(() =>
+      expect(plexClient.redirectToPlexAuth).toHaveBeenCalledWith(pin),
+    );
+    expect(openPopup).not.toHaveBeenCalled();
+    expect(plexClient.waitForPlexToken).not.toHaveBeenCalled();
+    expect(plexClient.readPendingPlexPin()).toEqual({
+      id: pin.id,
+      code: pin.code,
+    });
   });
 
   it("keeps authorization when a separate data pull fails", async () => {
