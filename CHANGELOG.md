@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.0.6 - 2026-08-08
+
+### Added
+
+- Add globally linked Privacy & Data Handling and Terms of Use pages for the public community deployment.
+- Document operator contact, actual retention and security behavior, Plex and Cloudflare boundaries, family use, and legal-review assumptions.
+
+### Changed
+
+- Remove an unused third-party image preconnection from the application shell.
+
 ## 4.0.5 - 2026-08-08
 
 ### Changed

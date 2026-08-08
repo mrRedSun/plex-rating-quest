@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   HISTORY_STAGE_KEY,
+  legalPageFromPath,
   pathForStage,
   stageFromHistoryState,
 } from "../lib/navigation";
@@ -21,5 +22,11 @@ describe("browser navigation", () => {
       stageFromHistoryState({ [HISTORY_STAGE_KEY]: "unknown" }),
     ).toBeNull();
     expect(stageFromHistoryState(null)).toBeNull();
+  });
+
+  it("recognizes only supported legal page paths", () => {
+    expect(legalPageFromPath("/privacy")).toBe("privacy");
+    expect(legalPageFromPath("/terms")).toBe("terms");
+    expect(legalPageFromPath("/privacy/extra")).toBeNull();
   });
 });

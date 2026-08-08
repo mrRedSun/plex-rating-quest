@@ -47,6 +47,7 @@ import { logError, logEvent } from "../../lib/diagnostics";
 import { getLocale, translate } from "../../lib/localization";
 import {
   HISTORY_STAGE_KEY,
+  legalPageFromPath,
   pathForStage,
   stageFromHistoryState,
 } from "../../lib/navigation";
@@ -64,6 +65,7 @@ import type {
 } from "../../lib/types";
 import { useQuestStore } from "../../store/quest-store";
 import { TierListStudio } from "./TierListStudio";
+import { LegalPage } from "./LegalPages";
 import {
   AccountControls,
   Brand,
@@ -1533,6 +1535,7 @@ const Complete = observer(function Complete(): React.ReactElement {
 export const PlexRatingQuest = observer(
   function PlexRatingQuest(): React.ReactElement {
     const stage = useQuestStore((state) => state.stage);
+    const legalPage = legalPageFromPath(window.location.pathname);
     const mediaCount = useQuestStore((state) => state.media.length);
     const setStage = useQuestStore((state) => state.setStage);
     const accessToken = useQuestStore((state) => state.accessToken);
@@ -1551,6 +1554,7 @@ export const PlexRatingQuest = observer(
         reducedMotion === true ? "reduced" : "full";
     }, [reducedMotion]);
     useEffect(() => {
+      if (legalPage !== null) return;
       let active = true;
       const refresh = async (
         minimumIntervalMs: number,
@@ -1607,8 +1611,10 @@ export const PlexRatingQuest = observer(
       mediaCount,
       refreshPlexContent,
       selectedServer,
+      legalPage,
     ]);
     useEffect(() => {
+      if (legalPage !== null) return;
       const state = { [HISTORY_STAGE_KEY]: stage };
       if (!historyInitialized.current) {
         window.history.replaceState(state, "", pathForStage(stage));
@@ -1620,8 +1626,9 @@ export const PlexRatingQuest = observer(
         return;
       }
       window.history.pushState(state, "", pathForStage(stage));
-    }, [stage]);
+    }, [legalPage, stage]);
     useEffect(() => {
+      if (legalPage !== null) return;
       const handlePopState = (event: PopStateEvent): void => {
         const requestedStage = stageFromHistoryState(event.state);
         const nextStage =
@@ -1649,7 +1656,8 @@ export const PlexRatingQuest = observer(
       };
       window.addEventListener("popstate", handlePopState);
       return () => window.removeEventListener("popstate", handlePopState);
-    }, [mediaCount, setStage, stage]);
+    }, [legalPage, mediaCount, setStage, stage]);
+    if (legalPage !== null) return <LegalPage kind={legalPage} />;
     if (stage === "welcome") return <Welcome />;
     if (stage === "mode") return <ModeSelect />;
     if (stage === "filters") return <Filters />;
