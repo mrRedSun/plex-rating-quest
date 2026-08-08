@@ -116,6 +116,31 @@ describe("durable separated Plex flows", () => {
     ).toBeEnabled();
   });
 
+  it("shows loading progress and cancels an in-flight Plex data pull", async () => {
+    let requestSignal: AbortSignal | undefined;
+    authorize();
+    vi.mocked(plexClient.fetchPlexServers).mockImplementation(
+      (_token, signal) => {
+        requestSignal = signal;
+        return new Promise(() => undefined);
+      },
+    );
+
+    render(<PlexRatingQuest />);
+    fireEvent.click(screen.getByRole("button", { name: /load my plex data/i }));
+
+    expect(
+      await screen.findByRole("dialog", { name: /finding your plex servers/i }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /cancel loading/i }));
+
+    await waitFor(() => expect(requestSignal?.aborted).toBe(true));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(questStore.accessToken).toBe("account-token");
+  });
+
   it("loads data from an already-authorized session without another PIN", async () => {
     authorize();
     vi.mocked(plexClient.fetchPlexServers).mockResolvedValue([SERVER]);

@@ -121,6 +121,12 @@ async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value);
 }
 
+function isAbortError(reason: unknown): boolean {
+  return reason instanceof DOMException && reason.name === "AbortError";
+}
+
+type WelcomeStatus = "idle" | "authenticating" | "pulling" | "choosing";
+
 function useSessionRestoration(
   token: string | null,
   setPlexAuth: (auth: {
@@ -146,13 +152,100 @@ function useSessionRestoration(
   }, [setPlexAuth, token]);
 }
 
+function LoadingScreen({
+  message,
+  onCancel,
+}: {
+  readonly message: string;
+  readonly onCancel: () => void;
+}): React.ReactElement {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => cancelRef.current?.focus(), []);
+  return (
+    <motion.div
+      className="loading-screen"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="loading-title"
+      aria-describedby="loading-description"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <div className="loading-aurora" aria-hidden="true" />
+      <div className="loading-content">
+        <div className="loading-orbit" aria-hidden="true">
+          <span />
+          <Gamepad2 size={30} />
+        </div>
+        <div className="eyebrow">
+          <Sparkles size={14} /> Preparing your quest
+        </div>
+        <h2 id="loading-title">{message}</h2>
+        <p id="loading-description">
+          This can take a moment for larger Plex libraries. Your progress stays
+          private and you can safely cancel.
+        </p>
+        <div className="loading-pulse" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <button
+          className="button button-secondary loading-cancel"
+          type="button"
+          onClick={onCancel}
+          ref={cancelRef}
+        >
+          <X size={17} /> Cancel loading
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+function ServerChooser({
+  choices,
+  onSelect,
+}: {
+  readonly choices: readonly PlexServer[];
+  readonly onSelect: (server: PlexServer) => void | Promise<void>;
+}): React.ReactElement {
+  return (
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="server-title"
+    >
+      <div className="modal-card">
+        <span className="brand-mark">
+          <Gamepad2 size={20} />
+        </span>
+        <h2 id="server-title">Choose your server</h2>
+        <p>We found more than one Plex Media Server.</p>
+        <div className="server-list">
+          {choices.map((server) => (
+            <button
+              key={`${server.name}-${server.uri}`}
+              onClick={() => void onSelect(server)}
+            >
+              <span>{server.name}</span>
+              <ChevronRight size={18} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const Welcome = observer(function Welcome(): React.ReactElement {
   const startDemo = useQuestStore((state) => state.startDemo);
-  const [status, setStatus] = useState<
-    "idle" | "authenticating" | "pulling" | "choosing"
-  >("idle");
+  const [status, setStatus] = useState<WelcomeStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<readonly PlexServer[]>([]);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const token = useQuestStore((state) => state.accessToken);
   const accountId = useQuestStore((state) => state.accountId);
@@ -165,12 +258,20 @@ const Welcome = observer(function Welcome(): React.ReactElement {
       connectedAccountId: string,
       server: PlexServer,
       servers: readonly PlexServer[],
+      signal: AbortSignal,
     ): Promise<void> => {
-      const resolved = await resolvePlexServer(server);
-      const media = await fetchPlexMedia(resolved.server, resolved.libraries, {
-        id: connectedAccountId,
-        token: accessToken,
-      });
+      setLoadingMessage("Connecting to your Plex server");
+      const resolved = await resolvePlexServer(server, signal);
+      setLoadingMessage("Building your private quest library");
+      const media = await fetchPlexMedia(
+        resolved.server,
+        resolved.libraries,
+        {
+          id: connectedAccountId,
+          token: accessToken,
+        },
+        signal,
+      );
       setPlexData({
         servers,
         selectedServer: resolved.server,
@@ -185,7 +286,8 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     async (pin: PlexPin, controller: AbortController): Promise<void> => {
       const accessToken = await waitForPlexToken(pin, controller.signal);
       clearPendingPlexPin();
-      const account = await fetchPlexAccount(accessToken);
+      setLoadingMessage("Confirming your Plex account");
+      const account = await fetchPlexAccount(accessToken, controller.signal);
       setPlexAuth({
         token: accessToken,
         accountId: account.id,
@@ -198,7 +300,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
 
   const handleConnectionFailure = useCallback((reason: unknown): void => {
     logError("auth.connection.failed", reason);
-    if (reason instanceof DOMException && reason.name === "AbortError") return;
+    if (isAbortError(reason)) return;
     clearPendingPlexPin();
     setError(
       reason instanceof Error ? reason.message : "Plex connection failed.",
@@ -223,8 +325,11 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     if (token === null || accountId === null) return;
     setError(null);
     setStatus("pulling");
+    setLoadingMessage("Finding your Plex servers");
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const servers = await fetchPlexServers(token);
+      const servers = await fetchPlexServers(token, controller.signal);
       if (servers.length === 0)
         throw new Error("No reachable Plex Media Server was found.");
       if (servers.length > 1) {
@@ -234,13 +339,22 @@ const Welcome = observer(function Welcome(): React.ReactElement {
       }
       const server = servers[0];
       if (server === undefined) throw new Error("No Plex server was selected.");
-      await finishConnection(token, accountId, server, servers);
+      await finishConnection(
+        token,
+        accountId,
+        server,
+        servers,
+        controller.signal,
+      );
     } catch (reason) {
+      if (isAbortError(reason)) return;
       logError("plex.data.pull.failed", reason);
       setError(
         reason instanceof Error ? reason.message : "Plex data pull failed.",
       );
       setStatus("idle");
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
     }
   }, [accountId, finishConnection, token]);
 
@@ -248,16 +362,28 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     async (server: PlexServer): Promise<void> => {
       if (token === null || accountId === null) return;
       setStatus("pulling");
+      setLoadingMessage("Connecting to your Plex server");
       setError(null);
+      const controller = new AbortController();
+      abortRef.current = controller;
       try {
-        await finishConnection(token, accountId, server, choices);
+        await finishConnection(
+          token,
+          accountId,
+          server,
+          choices,
+          controller.signal,
+        );
       } catch (reason) {
+        if (isAbortError(reason)) return;
         logError("plex.data.pull.failed", reason);
         setError(
           reason instanceof Error ? reason.message : "Plex data pull failed.",
         );
         setChoices([]);
         setStatus("idle");
+      } finally {
+        if (abortRef.current === controller) abortRef.current = null;
       }
     },
     [accountId, choices, finishConnection, token],
@@ -271,6 +397,7 @@ const Welcome = observer(function Welcome(): React.ReactElement {
     logEvent("auth.connection.resumed");
     setError(null);
     setStatus("authenticating");
+    setLoadingMessage("Waiting for Plex to finish sign-in");
     const controller = new AbortController();
     abortRef.current = controller;
     void finishPin(pendingPin, controller).catch(handleConnectionFailure);
@@ -278,6 +405,15 @@ const Welcome = observer(function Welcome(): React.ReactElement {
   }, [finishPin, handleConnectionFailure]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  const cancelLoading = useCallback((): void => {
+    logEvent("plex.loading.cancelled", { phase: status });
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (status === "authenticating") clearPendingPlexPin();
+    setError(null);
+    setStatus("idle");
+  }, [status]);
 
   return (
     <Shell>
@@ -403,34 +539,13 @@ const Welcome = observer(function Welcome(): React.ReactElement {
           </div>
         </motion.div>
       </section>
+      <AnimatePresence>
+        {(status === "authenticating" || status === "pulling") && (
+          <LoadingScreen message={loadingMessage} onCancel={cancelLoading} />
+        )}
+      </AnimatePresence>
       {status !== "choosing" ? null : (
-        <div
-          className="modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="server-title"
-        >
-          <div className="modal-card">
-            <span className="brand-mark">
-              <Gamepad2 size={20} />
-            </span>
-            <h2 id="server-title">Choose your server</h2>
-            <p>We found more than one Plex Media Server.</p>
-            <div className="server-list">
-              {choices.map((server) => (
-                <button
-                  key={`${server.name}-${server.uri}`}
-                  onClick={() => {
-                    void selectServer(server);
-                  }}
-                >
-                  <span>{server.name}</span>
-                  <ChevronRight size={18} />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <ServerChooser choices={choices} onSelect={selectServer} />
       )}
     </Shell>
   );
