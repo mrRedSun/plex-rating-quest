@@ -1,6 +1,6 @@
 services:
   plex-rating-quest:
-    image: ghcr.io/mrredsun/plex-rating-quest:v4.0.4
+    image: ghcr.io/mrredsun/plex-rating-quest:v4.0.5
     pull_policy: always
     container_name: plex-rating-quest
     restart: unless-stopped
