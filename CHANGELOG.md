@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.0.7 - 2026-08-08
+
+### Fixed
+
+- Reflow footer utilities into a balanced mobile grid without clipped or collapsed controls.
+- Restore spacing between the security disclosure and its icon-led trust features.
+
 ## 4.0.6 - 2026-08-08
 
 ### Added

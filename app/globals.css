@@ -634,7 +634,8 @@ select:focus-visible {
 .trust-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 12px 20px;
+  margin-top: 18px;
   color: #7f7983;
   font-size: 12px;
 }
@@ -1826,6 +1827,45 @@ select:focus-visible {
   .app-shell {
     padding-inline: 18px;
   }
+  .shell-utilities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: grid;
+    gap: 10px;
+    padding: 28px 0 20px;
+  }
+  .shell-utilities .legal-links,
+  .shell-utilities .account-controls {
+    grid-column: 1 / -1;
+  }
+  .shell-utilities .legal-links {
+    justify-content: center;
+    gap: 24px;
+    margin-right: 0;
+    padding-bottom: 4px;
+  }
+  .shell-utilities .account-controls {
+    justify-content: space-between;
+    padding: 8px 10px 8px 12px;
+  }
+  .shell-utilities .account-controls strong,
+  .shell-utilities .account-controls small {
+    max-width: 190px;
+  }
+  .shell-utilities .account-controls button span {
+    display: inline;
+  }
+  .shell-utilities .language-control,
+  .shell-utilities .diagnostics-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  .shell-utilities .language-control select {
+    min-width: 0;
+    max-width: calc(100% - 24px);
+  }
   .topbar {
     height: 75px;
   }
@@ -1850,7 +1890,13 @@ select:focus-visible {
     width: 100%;
   }
   .trust-row {
-    gap: 10px;
+    align-items: flex-start;
+    gap: 12px 18px;
+    margin-top: 16px;
+    line-height: 1.35;
+  }
+  .trust-row span {
+    min-height: 20px;
   }
   .quest-preview {
     width: 112%;
